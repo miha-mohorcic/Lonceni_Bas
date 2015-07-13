@@ -32,6 +32,8 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
+		<Unit filename="Adafruit_MPR121.cpp" />
+		<Unit filename="Adafruit_MPR121.h" />
 		<Unit filename="main.cpp" />
 		<Extensions>
 			<code_completion />

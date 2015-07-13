@@ -1,5 +1,5 @@
 # depslib dependency file v1.0
-1436777068 source:/home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/I2Cdev.cpp
+1436784881 source:/home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/I2Cdev.cpp
 	"I2Cdev.h"
 	<stdio.h>
 
@@ -12,14 +12,14 @@
 1436775963 /home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/bcm2835.h
 	<stdint.h>
 
-1436775333 source:/home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/MPR121.cpp
+1436788470 source:/home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/MPR121.cpp
 	"MPR121.h"
 	"I2Cdev.h"
 
 1436775388 /home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/MPR121.h
 	<inttypes.h>
 
-1436780716 source:/home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/bcm2835.c
+1436782680 source:/home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/bcm2835.c
 	<stdlib.h>
 	<stdio.h>
 	<errno.h>
@@ -30,7 +30,10 @@
 	<unistd.h>
 	"bcm2835.h"
 
-1436781048 source:/home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/main.cpp
+1436787429 source:/home/pi/Desktop/Lonceni_Bas/Code/CPP/LonceniBas/main.cpp
 	<iostream>
+	<stdio.h>
+	<stdlib.h>
 	"MPR121.h"
+	"I2Cdev.h"
 

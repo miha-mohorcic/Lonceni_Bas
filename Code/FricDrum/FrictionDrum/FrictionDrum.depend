@@ -1,0 +1,32 @@
+# depslib dependency file v1.0
+1436784881 source:/home/pi/Desktop/Lonceni_Bas/Code/FricDrum/FrictionDrum/MPR/I2Cdev.cpp
+	"I2Cdev.h"
+	<stdio.h>
+
+1436776174 /home/pi/Desktop/Lonceni_Bas/Code/FricDrum/FrictionDrum/MPR/I2Cdev.h
+	"bcm2835.h"
+	<math.h>
+	<stdlib.h>
+	<string.h>
+
+1436775963 /home/pi/Desktop/Lonceni_Bas/Code/FricDrum/FrictionDrum/MPR/bcm2835.h
+	<stdint.h>
+
+1436788470 source:/home/pi/Desktop/Lonceni_Bas/Code/FricDrum/FrictionDrum/MPR/MPR121.cpp
+	"MPR121.h"
+	"I2Cdev.h"
+
+1436775388 /home/pi/Desktop/Lonceni_Bas/Code/FricDrum/FrictionDrum/MPR/MPR121.h
+	<inttypes.h>
+
+1436782680 source:/home/pi/Desktop/Lonceni_Bas/Code/FricDrum/FrictionDrum/MPR/bcm2835.c
+	<stdlib.h>
+	<stdio.h>
+	<errno.h>
+	<fcntl.h>
+	<sys/mman.h>
+	<string.h>
+	<time.h>
+	<unistd.h>
+	"bcm2835.h"
+

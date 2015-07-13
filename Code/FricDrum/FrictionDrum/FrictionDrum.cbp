@@ -2,12 +2,12 @@
 <CodeBlocks_project_file>
 	<FileVersion major="1" minor="6" />
 	<Project>
-		<Option title="LonceniBas" />
+		<Option title="FrictionDrum" />
 		<Option pch_mode="2" />
 		<Option compiler="gcc" />
 		<Build>
 			<Target title="Debug">
-				<Option output="bin/Debug/LonceniBas" prefix_auto="1" extension_auto="1" />
+				<Option output="bin/Debug/FrictionDrum" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
@@ -16,7 +16,7 @@
 				</Compiler>
 			</Target>
 			<Target title="Release">
-				<Option output="bin/Release/LonceniBas" prefix_auto="1" extension_auto="1" />
+				<Option output="bin/Release/FrictionDrum" prefix_auto="1" extension_auto="1" />
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
@@ -32,15 +32,14 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="I2Cdev.cpp" />
-		<Unit filename="I2Cdev.h" />
-		<Unit filename="LonceniBas.cbp" />
-		<Unit filename="MPR121.cpp" />
-		<Unit filename="MPR121.h" />
-		<Unit filename="bcm2835.c">
+		<Unit filename="MPR/I2Cdev.cpp" />
+		<Unit filename="MPR/I2Cdev.h" />
+		<Unit filename="MPR/MPR121.cpp" />
+		<Unit filename="MPR/MPR121.h" />
+		<Unit filename="MPR/bcm2835.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="bcm2835.h" />
+		<Unit filename="MPR/bcm2835.h" />
 		<Unit filename="main.cpp" />
 		<Extensions>
 			<code_completion />
