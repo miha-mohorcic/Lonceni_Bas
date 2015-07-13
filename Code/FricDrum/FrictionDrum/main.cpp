@@ -1,32 +1,28 @@
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "MPR/MPR121.h"
-#include "MPR/I2Cdev.h"
 
 using namespace std;
 
-
 int main()
 {
-    cout << "Hello MPR121!" << endl;
+    cout << "Starting up!" << endl;
 
     MPR121 senzor = MPR121();
-    cout << "class" << endl;
+    senzor.initialize();
 
+    /*
     if (senzor.testConnection()){
-        cout << "MPR121 OK" << endl;
+        cout << "MPR121 OK!" << endl;
         cout << flush;
     }
     else {
-        cout << "MPR121 not OK" << endl;
+        cout << "MPR121 not OK!" << endl;
         cout << flush;
         return 1;
     }
-    cout << "init" << endl;
+    */
 
-    senzor.initialize();
     cout << "loop" << endl;
 
     bool touched;

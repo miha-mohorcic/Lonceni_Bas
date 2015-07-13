@@ -47,7 +47,9 @@ void MPR121::initialize()
 {
   // These are the configuration values recommended by app note AN3944
   // along with the description in the app note.
+
   I2Cdev::initialize();
+
   // Section A
   // Description:
   //   This group of settings controls the filtering of the system
