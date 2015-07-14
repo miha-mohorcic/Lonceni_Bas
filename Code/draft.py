@@ -18,7 +18,7 @@ if not cap.begin():
 print 'Press Ctrl-C to quit.'
 last_touched = cap.touched()
 
-timing = [0,0,0,0,0,0,0,0,0,0,0,0]
+timing = [-t1,0,0,0,0,0,0,0,0,0,0,0]
 cap.set_thresholds(2,2)
 
 
@@ -57,3 +57,4 @@ while True:
     #print 'Filt:', '\t'.join(map(str, filtered))
     #base = [cap.baseline_data(i) for i in range(12)]
     #print 'Base:', '\t'.join(map(str, base))
+
