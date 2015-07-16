@@ -30,7 +30,7 @@
 	<unistd.h>
 	"bcm2835.h"
 
-1436957554 source:/home/pi/Desktop/Lonceni_Bas/Code/FricDrum/FrictionDrum/main.cpp
+1437052630 source:/home/pi/Desktop/Lonceni_Bas/Code/FricDrum/FrictionDrum/main.cpp
 	<iostream>
 	<unistd.h>
 	<chrono>
@@ -38,4 +38,5 @@
 	<ratio>
 	<pthread.h>
 	"MPR/MPR121.h"
+	<fstream>
 
