@@ -130,7 +130,7 @@ void MPR121::initialize()
   I2Cdev::writeByte(m_devAddr, ELE11_RELEASE_THRESHOLD, RELEASE_THRESHOLD);
 
   //ADDED BY MIHA & KARMEN  to reduce random hangs
-  I2Cdev::writeByte(m_devAddr, DEBOUNCE_TOUCH_AND_RELEASE, 0x22);
+  I2Cdev::writeByte(m_devAddr, DEBOUNCE_TOUCH_AND_RELEASE, 0x44);
 
   // Section D
   // Description:
