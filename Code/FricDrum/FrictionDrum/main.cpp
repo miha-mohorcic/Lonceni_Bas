@@ -1,49 +1,44 @@
 #include <iostream>
 #include <unistd.h>
-
 #include <chrono>
 #include <ctime>
 #include <ratio>
-
 #include <pthread.h>
-
 #include "MPR/MPR121.h"
-
 #include <fstream>
 
-
-bool touched[12] = {false};
-double times[12] = {10.0};
+#define MPR121_NUM_INPUTS 12 // number of inputs on MPR121 used
+#define MICRO_S_SLEEP 50000 // micro seconds of sleep
+bool touched[12] = {false}; // global status of currently active inputs
 
 using namespace std;
 using namespace std::chrono;
 
 void *sense_thread(void *threadid)
 {
-
-    MPR121 senzor = MPR121();
+    MPR121 senzor = MPR121(); //initalizing MPR121
     senzor.initialize();
 
-    if (senzor.testConnection())
+/*
+    if (senzor.testConnection()) //testing MPR connection (checks register)
     {
         cout << "MPR121 OK starting program!" << endl;
-        cout << flush;
     }
     else
     {
         cout << "MPR121 not OK closing program!" << endl;
-        cout << flush;
         pthread_exit(NULL);
     }
+*/
 
-    int num_sensors = 12;
     bool temp_touched;
     high_resolution_clock::time_point last_change_time[12];
+    double times[12] = {10.0};
 
     while(true)
     {
         int i = 0;
-        while (i < num_sensors )
+        while (i < MPR121_NUM_INPUTS )
         {
             temp_touched = senzor.getTouchStatus(i);
             if (temp_touched != touched[i])
@@ -68,7 +63,7 @@ void *sense_thread(void *threadid)
             }
             i++;
         }
-        usleep(25000);
+        usleep(MICRO_S_SLEEP);
     }
     pthread_exit(NULL);
 }
@@ -101,10 +96,11 @@ int main()
     int hist_sample = 10;
     bool **hist;
     hist = (bool **)malloc(sizeof(double *)*hist_sample);
-    for(int i=0;i<hist_sample;i++){
+    for(int i=0; i<hist_sample; i++)
+    {
         hist[i] = (bool *)malloc(sizeof(double)*12);
     }
-    int temp_sum, number_sum = 0;
+    int temp_sum = 0;
     double temp_avg = 0.0;
     bool *temp_row;
 
@@ -113,30 +109,36 @@ int main()
         temp_row = hist[0];
         double avg = 0.0;
         double old_avg = 0.0;
-        for (int i=0; i<12;i++)
+        int number_sum = 0;
+        for (int i=0; i<12; i++)
         {
-            if(hist[0][i]){
+            if(hist[0][i])
+            {
                 old_avg+=(double)i;
                 number_sum++;
                 //cout << "1";
-            }else{
+            }
+            else
+            {
                 //cout << "0";
-                }
+            }
         }
         //cout << "  " << 0 << "\n";
         old_avg=(double)(old_avg/number_sum);
-        for (int i=1;i < hist_sample;i++)
+        for (int i=1; i < hist_sample; i++)
         {
             number_sum=0;
             temp_sum=0;
-            for (int j=0; j<12;j++)
+            for (int j=0; j<12; j++)
             {
                 if(hist[i][j])
                 {
                     number_sum++;
                     temp_sum+=j;
                     //cout << "1";
-                }else{
+                }
+                else
+                {
                     //cout << "0";
                 }
             }
@@ -152,28 +154,47 @@ int main()
         // also move the last col
         hist[hist_sample-1]=temp_row;
 
-        int j=0;
-        while(j<12)
+        for(int j=0; j<12; j++)
         {
-            //cout << touched[j];
+            cout << touched[j];
             hist[hist_sample-1][j]=touched[j];
-            j++;
         }
-        //cout << "\n\n";
-        if(avg < 0.0)
+        cout << "\n";
+
+        bool hold = true;
+        for(int j=0; j<12; j++)
+        {
+            hold = true;
+            for(int i=0; i<10; i++)
+            {
+                if(!hist[i][j])
+                {
+                    hold=false;
+                    break;
+                }
+            }
+            if(hold)
+            {
+                break;
+            }
+        }
+
+        if(avg < 0.0 && !hold)
         {
             cout << avg << " Premik gor\n";
         }
-        else if(avg > 0.0)
+        else if(avg > 0.0 && !hold)
         {
             cout << avg << " Premik dol\n";
         }
         else
         {
-            //cout << avg << " Ni spremembe\n";
+            if(hold)
+                cout << "Zaznavam drzanje!";
+            //cout << " Ni spremembe\n";
         }
 
-        usleep(25000);
+        usleep(MICRO_S_SLEEP);
     }
 
     /*

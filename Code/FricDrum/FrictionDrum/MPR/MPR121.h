@@ -177,8 +177,8 @@ THE SOFTWARE.
 
 // Other Constants
 // these are suggested values from app note 3944
-#define TOUCH_THRESHOLD   0x0F
-#define RELEASE_THRESHOLD 0x0A
+#define TOUCH_THRESHOLD   0x04
+#define RELEASE_THRESHOLD 0x03
 #define NUM_CHANNELS      12
 
 class MPR121
@@ -189,16 +189,16 @@ class MPR121
       RELEASED   = 1,
       NUM_EVENTS = 2
     };
-  
+
     typedef void (*CallbackPtrType)(void);
-    
+
     // constructor
     // takes a 7-b I2C address to use (0x5A by default, assumes addr pin grounded)
     MPR121(uint8_t address = MPR121_DEFAULT_ADDRESS);
 
     // write the configuration registers in accordance with the datasheet and app note 3944
     void initialize();
-    
+
     // returns true if the device is responding on the I2C bus
     bool testConnection();
 
@@ -208,14 +208,14 @@ class MPR121
     uint16_t getTouchStatus();
 
     void setCallback(uint8_t channel, EventType event, CallbackPtrType callbackPtr);
-    
+
     void serviceCallbacks();
-    
+
   private:
     uint8_t m_devAddr; // contains the I2C address of the device
     CallbackPtrType m_callbackMap[NUM_CHANNELS][NUM_EVENTS];
     bool m_prevTouchStatus[NUM_CHANNELS];
-    
+
 };
 
 #endif

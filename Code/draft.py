@@ -18,8 +18,8 @@ if not cap.begin():
 print 'Press Ctrl-C to quit.'
 last_touched = cap.touched()
 
-timing = [-t1,0,0,0,0,0,0,0,0,0,0,0]
-cap.set_thresholds(2,2)
+timing = [0,0,0,0,0,0,0,0,0,0,0,0]
+#cap.set_thresholds(2,2)
 
 
 while True:

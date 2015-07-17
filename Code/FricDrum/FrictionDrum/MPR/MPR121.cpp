@@ -48,6 +48,7 @@ void MPR121::initialize()
   // These are the configuration values recommended by app note AN3944
   // along with the description in the app note.
 
+  // ADDED BY MIHA & KARMEN to initilaize I2C if it hasn't been done before
   I2Cdev::initialize();
 
   // Section A
@@ -127,6 +128,9 @@ void MPR121::initialize()
   I2Cdev::writeByte(m_devAddr, ELE10_RELEASE_THRESHOLD, RELEASE_THRESHOLD);
   I2Cdev::writeByte(m_devAddr, ELE11_TOUCH_THRESHOLD,   TOUCH_THRESHOLD);
   I2Cdev::writeByte(m_devAddr, ELE11_RELEASE_THRESHOLD, RELEASE_THRESHOLD);
+
+  //ADDED BY MIHA & KARMEN  to reduce random hangs
+  I2Cdev::writeByte(m_devAddr, DEBOUNCE_TOUCH_AND_RELEASE, 0x22);
 
   // Section D
   // Description:
