@@ -1,12 +1,15 @@
 #include <iostream>
+#include <string>
 #include <unistd.h>
 
 #include <pthread.h>
 #include "MPR/MPR121.h"
 
+#include "soundtouch/SoundTouch.h"
+
 #define MPR121_NUM_INPUTS 12    // number of inputs on MPR121 used
 #define HIST_INP_SAMPLE 10      // number of samples used for history of touches
-#define MICRO_S_SLEEP 25000     // micro seconds of sleep
+#define MICRO_S_SLEEP 35000     // micro seconds of sleep
 
 #define DEBUG false
 
@@ -32,27 +35,44 @@ void *sense_thread(void *threadid)
     while(true) //constantly check input status and remember time from last change
     {
         touched = senzor.getTouchStatus();
-        if(DEBUG)
-        {
-            bool t;
-            uint16_t mask=1;
-            for(int i=0; i<MPR121_NUM_INPUTS; i++)
-            {
-                t = ( touched & mask ) > 0;
-                cout << t;
-                mask<<= 1;
-            }
-            cout << "\n";
-        }
+        //if(DEBUG)
+        //{
+            //bool t;
+            //uint16_t mask=1;
+            //for(int i=0; i<MPR121_NUM_INPUTS; i++)
+            //{
+                //t = ( touched & mask ) > 0;
+                //cout << t;
+                //mask<<= 1;
+            //}
+            //cout << "\n";
+        //}
         usleep(MICRO_S_SLEEP);
     }
     pthread_exit(NULL); //if for some reason we fall out of loop (graceful exit)
 }
+////////////////////////////////////////////////////////////////////////////////
+//
+// Last changed  : $Date: 2015-05-18 17:32:21 +0000 (Mon, 18 May 2015) $
+// File revision : $Revision: 4 $
+//
 
 void *produce_thread(void *threadid)
 {
-    //TODO: Thread that produces sound
-
+	//TODO: Thread that produces sound 
+	//look at soundStrech example
+	
+	
+	string file_up = "C.wav";
+	string file_down = "D.wav";
+	    
+	//load files in MEM
+	
+	//loop
+		//event checking
+		//apply filters (pitch)
+		//play sample  - Poglej kako proizvesti zvok iz waveforma. 
+	
     pthread_exit(NULL);
 }
 
@@ -80,7 +100,8 @@ int detectGesture()
         }
         mask <<= 1;
     }
-    if(pins_touched > 0)  //avoid nan as result
+    //if(pins_touched > 0)  //avoid nan as result
+    if(true)
     {
         new_avg = (double)new_avg/pins_touched;
         avg += hist_avg_sample[HIST_INP_SAMPLE -1] - new_avg;
@@ -91,10 +112,10 @@ int detectGesture()
         hist_avg_sample[HIST_INP_SAMPLE-1] = 0.0;
     }
 
-    if(DEBUG)
-    {
-        cout << " avg" << avg <<" ";
-    }
+    //if(DEBUG)
+    //{
+        //cout << " avg" << avg <<" ";
+    //}
 
     if(avg<0.0)
         return 1;
@@ -138,10 +159,10 @@ bool detectHold(uint16_t *hist) //detect when  stick is held
             break;
         }
     }
-    if (DEBUG)
-    {
-        cout << " hold" <<  hold << " ";
-    }
+    //if (DEBUG)
+    //{
+        //cout << " hold" <<  hold << " ";
+    //}
     return hold;
 }
 
@@ -175,6 +196,9 @@ int main()
     {
         gesture = detectGesture(); // get gesture #
         hold = detectHold(hist); // detect if user is holding a stick
+
+        // TODO: get info from joystick and generate suitable  pitch
+        // TODO: playSound(gesture, pitch)  
 
         // recognize gesture
         if(gesture == 1 && !hold)
