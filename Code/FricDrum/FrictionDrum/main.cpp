@@ -1,11 +1,17 @@
+/////////////////////////////////////////////////////
+/// Friction drum
+/// UL FRI - LGM project
+/////////////////////////////////////////////////////
+
 #include <iostream>
 #include <string>
 #include <unistd.h>
 
 #include <pthread.h>
-#include "MPR/MPR121.h"
+#include "include/MPR121.h"
 
 #include "soundtouch/SoundTouch.h"
+#include "include/WavFile.h"
 
 #define MPR121_NUM_INPUTS 12    // number of inputs on MPR121 used
 #define HIST_INP_SAMPLE 10      // number of samples used for history of touches
@@ -15,6 +21,7 @@
 
 uint16_t touched = 0; // global bitwise status of currently active inputs
 
+using namespace soundtouch;
 using namespace std;
 
 void *sense_thread(void *threadid)
@@ -59,20 +66,36 @@ void *sense_thread(void *threadid)
 
 void *produce_thread(void *threadid)
 {
-	//TODO: Thread that produces sound 
+	//TODO: Thread that produces sound
 	//look at soundStrech example
-	
-	
-	string file_up = "C.wav";
-	string file_down = "D.wav";
-	    
+
+
+	char const *file_up = "C.wav";
+	char const *file_down = "D.wav";
+	char const *file_tap = "E.wav";
+
 	//load files in MEM
-	
+	WavInFile *fileUp;
+	WavInFile *fileDown;
+	WavInFile *fileTap;
+
+	int bits1,bits2,bits3;
+	int srate1,srate2,srate3;
+	int channels1,channels2,channels3;
+
+	fileUp = new WavInFile(file_up);
+	bits1 = (int)(fileUp)->getNumBits();
+	srate1 = (int)(fileUp)->getSampleRate();
+	channels1 = (int)(fileUp)->getNumChannels();
+
+
+	cout << bits1 << " " << srate1 << " " << channels1 << endl;
+
 	//loop
 		//event checking
 		//apply filters (pitch)
-		//play sample  - Poglej kako proizvesti zvok iz waveforma. 
-	
+		//play sample  - Poglej kako proizvesti zvok iz waveforma.
+
     pthread_exit(NULL);
 }
 
@@ -198,7 +221,7 @@ int main()
         hold = detectHold(hist); // detect if user is holding a stick
 
         // TODO: get info from joystick and generate suitable  pitch
-        // TODO: playSound(gesture, pitch)  
+        // TODO: playSound(gesture, pitch)
 
         // recognize gesture
         if(gesture == 1 && !hold)

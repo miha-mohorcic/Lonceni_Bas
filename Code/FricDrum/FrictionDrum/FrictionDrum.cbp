@@ -38,14 +38,16 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="MPR/I2Cdev.cpp" />
-		<Unit filename="MPR/I2Cdev.h" />
-		<Unit filename="MPR/MPR121.cpp" />
-		<Unit filename="MPR/MPR121.h" />
-		<Unit filename="MPR/bcm2835.c">
+		<Unit filename="include/I2Cdev.cpp" />
+		<Unit filename="include/I2Cdev.h" />
+		<Unit filename="include/MPR121.cpp" />
+		<Unit filename="include/MPR121.h" />
+		<Unit filename="include/WavFile.cpp" />
+		<Unit filename="include/WavFile.h" />
+		<Unit filename="include/bcm2835.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="MPR/bcm2835.h" />
+		<Unit filename="include/bcm2835.h" />
 		<Unit filename="main.cpp" />
 		<Extensions>
 			<code_completion />
