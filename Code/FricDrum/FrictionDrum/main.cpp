@@ -62,13 +62,16 @@ void *sense_thread(void *threadid)
 
 static Uint8 *audio_pos;
 static Uint32 audio_len;
- 
+static int global_current_gesture;
+
 void my_audio_callback(void *userdata, Uint8 *stream, int len){
-	if(audio_len>0)
+	
+	if(audio_len == 0)
 		return;
 	len = (len > audio_len ? audio_len : len );
 	
-	SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME);
+	SDL_memcpy (stream, audio_pos, len); 	
+	//SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME);
 	
 	audio_pos += len;
 	audio_len -= len;
@@ -77,49 +80,91 @@ void my_audio_callback(void *userdata, Uint8 *stream, int len){
 
 void *produce_thread(void *threadid)
 {
-	//TODO: Thread that produces sound
-
-	char const *file_up = "C.wav";
-	char const *file_down = "D.wav";
-	char const *file_tap = "E.wav";
-
-	//load files in MEM using SDL
+	//names of files used for sound
+	char const *file_up = "C.wav"; //what to play on gesture up
+	char const *file_down = "D.wav"; //what to play on gesture down
+	char const *file_tap = "E.wav"; //what to play on top tap 
+	
+	//initialize SDL_AUDIO
 	if(SDL_Init(SDL_INIT_AUDIO) < 0){
 		cout << "SDL ISSUES WOOHOO" << endl;
+		//TODO gracefully close application
 	}
 	
-	SDL_AudioSpec upSound;
-	Uint32 up_length;
-	Uint8 *up_buffer;
+	SDL_AudioSpec audio_spec; //spec file used to get audio info
 	
-	if(SDL_LoadWAV(file_up,&upSound,&up_buffer,&up_length) == NULL)
+	Uint32 sound_len[4]; // silence, up, down, tap in order of array
+	Uint8 **sound_buf = (Uint8 **)calloc(4, sizeof(Uint8 *));
+	//Uint8 *sound_buf[4];
+	
+	//loading wav files
+	if(	SDL_LoadWAV(file_up,&audio_spec,&sound_buf[1],&sound_len[1]) == NULL ||
+	SDL_LoadWAV(file_down,&audio_spec,&sound_buf[2],&sound_len[2]) == NULL ||
+	SDL_LoadWAV(file_tap,&audio_spec,&sound_buf[3],&sound_len[3]) == NULL )
 	{
 		cout << "FILE ISSUES, WOOHOO!";
+		//TODO gracefully close application
 	}
-
-	upSound.callback = my_audio_callback;
-	upSound.userdata = NULL;
 	
-	audio_pos = up_buffer;
-	audio_len = up_length;
+	sound_len[0] = sound_len[1]; //silence sound
+	sound_buf[0] = (Uint8 *)calloc(sound_len[1], sizeof(Uint8));
+	
+	//set spec file
+	audio_spec.callback = my_audio_callback;
+	audio_spec.userdata = NULL;
+	
+	//begin playing "silence"
+	audio_pos = sound_buf[0];
+	audio_len = sound_len[0];
 
-	//cout << bits1 << " " << srate1 << " " << channels1 << endl;
-
-	//loop
-		//event checking
-		//apply filters (pitch)
-	if( SDL_OpenAudio(&upSound, NULL) <  0);
+	if(  SDL_OpenAudio(&audio_spec, NULL) <  0)
 	{
-		cout << "AUDIO ISSUES, WOOHOO!\n\n" << SDL_GetError() << endl ;
+		cout << "AUDIO ISSUES!\n" << "\"" << SDL_GetError() << "\"" << endl ;
+		//TODO gracefully close application
 	}
-	
+		
+	//start playing sound
 	SDL_PauseAudio(0);
-	while( audio_len > 0)
-		SDL_Delay(1);
+	
+	int prev_gesture = 0;
+	int current_gesture = 0;
+	//TODO KJE SPREMINJAMO PITCH????
+	while(true){
+		while(audio_len > 0){
+			
+			current_gesture = global_current_gesture;
+			//check change of events and switch pointers if necceseray	
+			//pointer audio_len & audio_pos
+			if(prev_gesture != current_gesture)
+			{
+				SDL_LockAudio();
+				
+				audio_len = sound_len[current_gesture];
+				audio_pos = sound_buf[current_gesture];
+				
+				SDL_UnlockAudio();
+				prev_gesture = current_gesture;
+			}
+			usleep(MICRO_S_SLEEP /2);
+		}
+		//cout << "PADU VEN!!!!!!" << endl ;
+		// TODO  - poglej zakaj si sel iz prejsnjega while - popravi pointerje in nadaljuj	
+		
+		SDL_LockAudio();
+		
+		audio_len = sound_len[0];
+		audio_pos = sound_buf[0];
+		
+		SDL_UnlockAudio();
+		
+		//SDL_PauseAudio(0);
+	}
 	
 	SDL_CloseAudio();
-	SDL_FreeWAV(up_buffer);
-
+	SDL_FreeWAV(sound_buf[0]);
+	SDL_FreeWAV(sound_buf[1]);
+	SDL_FreeWAV(sound_buf[2]);
+	SDL_FreeWAV(sound_buf[3]);
     pthread_exit(NULL);
 }
 
@@ -242,6 +287,8 @@ int main()
     while(true)
     {
         gesture = detectGesture(); // get gesture #
+        global_current_gesture = gesture; //TODO TOO SIMPLIFIED!!!!
+        
         hold = detectHold(hist); // detect if user is holding a stick
 
         // TODO: get info from joystick and generate suitable  pitch
@@ -260,6 +307,7 @@ int main()
         }
         else if(hold)
             cout << "Zaznavam drzanje!\n";
+
 
         usleep(MICRO_S_SLEEP);
 
