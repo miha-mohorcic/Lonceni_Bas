@@ -11,7 +11,8 @@
 #include "include/MPR121.h"
 
 #include "soundtouch/SoundTouch.h"
-#include "include/WavFile.h"
+
+#include "SDL2/SDL.h"
 
 #define MPR121_NUM_INPUTS 12    // number of inputs on MPR121 used
 #define HIST_INP_SAMPLE 10      // number of samples used for history of touches
@@ -58,43 +59,66 @@ void *sense_thread(void *threadid)
     }
     pthread_exit(NULL); //if for some reason we fall out of loop (graceful exit)
 }
-////////////////////////////////////////////////////////////////////////////////
-//
-// Last changed  : $Date: 2015-05-18 17:32:21 +0000 (Mon, 18 May 2015) $
-// File revision : $Revision: 4 $
-//
+
+static Uint8 *audio_pos;
+static Uint32 audio_len;
+ 
+void my_audio_callback(void *userdata, Uint8 *stream, int len){
+	if(audio_len>0)
+		return;
+	len = (len > audio_len ? audio_len : len );
+	
+	SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME);
+	
+	audio_pos += len;
+	audio_len -= len;
+}
+
 
 void *produce_thread(void *threadid)
 {
 	//TODO: Thread that produces sound
-	//look at soundStrech example
-
 
 	char const *file_up = "C.wav";
 	char const *file_down = "D.wav";
 	char const *file_tap = "E.wav";
 
-	//load files in MEM
-	WavInFile *fileUp;
-	WavInFile *fileDown;
-	WavInFile *fileTap;
+	//load files in MEM using SDL
+	if(SDL_Init(SDL_INIT_AUDIO) < 0){
+		cout << "SDL ISSUES WOOHOO" << endl;
+	}
+	
+	SDL_AudioSpec upSound;
+	Uint32 up_length;
+	Uint8 *up_buffer;
+	
+	if(SDL_LoadWAV(file_up,&upSound,&up_buffer,&up_length) == NULL)
+	{
+		cout << "FILE ISSUES, WOOHOO!";
+	}
 
-	int bits1,bits2,bits3;
-	int srate1,srate2,srate3;
-	int channels1,channels2,channels3;
+	upSound.callback = my_audio_callback;
+	upSound.userdata = NULL;
+	
+	audio_pos = up_buffer;
+	audio_len = up_length;
 
-	fileUp = new WavInFile(file_up);
-	bits1 = (int)(fileUp)->getNumBits();
-	srate1 = (int)(fileUp)->getSampleRate();
-	channels1 = (int)(fileUp)->getNumChannels();
-
-
-	cout << bits1 << " " << srate1 << " " << channels1 << endl;
+	//cout << bits1 << " " << srate1 << " " << channels1 << endl;
 
 	//loop
 		//event checking
 		//apply filters (pitch)
-		//play sample  - Poglej kako proizvesti zvok iz waveforma.
+	if( SDL_OpenAudio(&upSound, NULL) <  0);
+	{
+		cout << "AUDIO ISSUES, WOOHOO!\n\n" << SDL_GetError() << endl ;
+	}
+	
+	SDL_PauseAudio(0);
+	while( audio_len > 0)
+		SDL_Delay(1);
+	
+	SDL_CloseAudio();
+	SDL_FreeWAV(up_buffer);
 
     pthread_exit(NULL);
 }

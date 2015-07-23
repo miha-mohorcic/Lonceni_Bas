@@ -177,8 +177,8 @@ THE SOFTWARE.
 
 // Other Constants
 // these are suggested values from app note 3944
-#define TOUCH_THRESHOLD   0x04
-#define RELEASE_THRESHOLD 0x03
+#define TOUCH_THRESHOLD   0x0F
+#define RELEASE_THRESHOLD 0x0A
 #define NUM_CHANNELS      12
 
 class MPR121
