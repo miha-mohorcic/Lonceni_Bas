@@ -8,23 +8,21 @@
 #include <unistd.h>
 
 #include <pthread.h>
+
 #include "include/MPR121.h"
-
 #include "soundtouch/SoundTouch.h"
-
 #include "SDL2/SDL.h"
 
 #define MPR121_NUM_INPUTS 12    // number of inputs on MPR121 used
 #define HIST_INP_SAMPLE 10      // number of samples used for history of touches
-#define MICRO_S_SLEEP 35000     // micro seconds of sleep
-
-#define DEBUG false
+#define MICRO_S_SLEEP 35000     // micro seconds of sleep between samples
 
 uint16_t touched = 0; // global bitwise status of currently active inputs
 
 using namespace soundtouch;
 using namespace std;
 
+//MPR121 thread updating status of touched pins
 void *sense_thread(void *threadid)
 {
     MPR121 senzor = MPR121(); //initalizing MPR121
@@ -32,31 +30,20 @@ void *sense_thread(void *threadid)
 
     if (senzor.testConnection()) //testing MPR connection (checks register)
     {
-        cout << "MPR121 OK starting program!" << endl;
+        cout << "MPR121 OK,   \nStarting sense thread!" << endl;
     }
     else
     {
-        cout << "MPR121 not OK closing program!" << endl;
+        cout << "MPR121 not OK,\nStopping sense thread!" << endl;
         pthread_exit(NULL);
     }
 
     while(true) //constantly check input status and remember time from last change
     {
         touched = senzor.getTouchStatus();
-        //if(DEBUG)
-        //{
-            //bool t;
-            //uint16_t mask=1;
-            //for(int i=0; i<MPR121_NUM_INPUTS; i++)
-            //{
-                //t = ( touched & mask ) > 0;
-                //cout << t;
-                //mask<<= 1;
-            //}
-            //cout << "\n";
-        //}
         usleep(MICRO_S_SLEEP);
     }
+    //TODO: Notify main thread
     pthread_exit(NULL); //if for some reason we fall out of loop (graceful exit)
 }
 
@@ -64,20 +51,25 @@ static Uint8 *audio_pos;
 static Uint32 audio_len;
 static int global_current_gesture;
 
+//SDL audio callback - plays wave found at audio_pos 
 void my_audio_callback(void *userdata, Uint8 *stream, int len){
 	
 	if(audio_len == 0)
 		return;
 	len = (len > audio_len ? audio_len : len );
 	
-	SDL_memcpy (stream, audio_pos, len); 	
-	//SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME);
+	
+	//  TODO: HERE BEFORE COMPYING INTO MEMORY SEND TO TOUCHSOUND TO ADJUST PITCH!
+	
+	
+	SDL_memcpy (stream, audio_pos, len); 	//substitute stream
+	//SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME); //mix with existing stream
 	
 	audio_pos += len;
 	audio_len -= len;
 }
 
-
+//Loading wav files, checking current events and playing corresponding sound
 void *produce_thread(void *threadid)
 {
 	//names of files used for sound
@@ -87,7 +79,7 @@ void *produce_thread(void *threadid)
 	
 	//initialize SDL_AUDIO
 	if(SDL_Init(SDL_INIT_AUDIO) < 0){
-		cout << "SDL ISSUES WOOHOO" << endl;
+		cout << "SDL NOT INITIALIZED!\n" << SDL_GetError()  << endl;
 		//TODO gracefully close application
 	}
 	
@@ -95,31 +87,30 @@ void *produce_thread(void *threadid)
 	
 	Uint32 sound_len[4]; // silence, up, down, tap in order of array
 	Uint8 **sound_buf = (Uint8 **)calloc(4, sizeof(Uint8 *));
-	//Uint8 *sound_buf[4];
 	
 	//loading wav files
 	if(	SDL_LoadWAV(file_up,&audio_spec,&sound_buf[1],&sound_len[1]) == NULL ||
 	SDL_LoadWAV(file_down,&audio_spec,&sound_buf[2],&sound_len[2]) == NULL ||
 	SDL_LoadWAV(file_tap,&audio_spec,&sound_buf[3],&sound_len[3]) == NULL )
 	{
-		cout << "FILE ISSUES, WOOHOO!";
+		cout << "ERROR OPENING FILES!\n" << SDL_GetError() << endl;
 		//TODO gracefully close application
 	}
 	
-	sound_len[0] = sound_len[1]; //silence sound
+	sound_len[0] = sound_len[1]; //define silence sound (fill 0s)
 	sound_buf[0] = (Uint8 *)calloc(sound_len[1], sizeof(Uint8));
 	
 	//set spec file
 	audio_spec.callback = my_audio_callback;
 	audio_spec.userdata = NULL;
 	
-	//begin playing "silence"
+	//Start playing flat wave
 	audio_pos = sound_buf[0];
 	audio_len = sound_len[0];
 
 	if(  SDL_OpenAudio(&audio_spec, NULL) <  0)
 	{
-		cout << "AUDIO ISSUES!\n" << "\"" << SDL_GetError() << "\"" << endl ;
+		cout << "FAILED OPENING AUDIO DEVICE!\n" << SDL_GetError() << endl ;
 		//TODO gracefully close application
 	}
 		
@@ -128,38 +119,31 @@ void *produce_thread(void *threadid)
 	
 	int prev_gesture = 0;
 	int current_gesture = 0;
-	//TODO KJE SPREMINJAMO PITCH????
 	while(true){
 		while(audio_len > 0){
-			
 			current_gesture = global_current_gesture;
-			//check change of events and switch pointers if necceseray	
-			//pointer audio_len & audio_pos
 			if(prev_gesture != current_gesture)
 			{
 				SDL_LockAudio();
-				
 				audio_len = sound_len[current_gesture];
 				audio_pos = sound_buf[current_gesture];
-				
 				SDL_UnlockAudio();
+				
 				prev_gesture = current_gesture;
 			}
 			usleep(MICRO_S_SLEEP /2);
 		}
-		//cout << "PADU VEN!!!!!!" << endl ;
-		// TODO  - poglej zakaj si sel iz prejsnjega while - popravi pointerje in nadaljuj	
 		
+		//in case sample ends, continue with flat wave
+		//TODO: talk about continuing with same sample?
 		SDL_LockAudio();
-		
 		audio_len = sound_len[0];
 		audio_pos = sound_buf[0];
-		
 		SDL_UnlockAudio();
 		
-		//SDL_PauseAudio(0);
 	}
 	
+	//in case program falls here: close everything
 	SDL_CloseAudio();
 	SDL_FreeWAV(sound_buf[0]);
 	SDL_FreeWAV(sound_buf[1]);
@@ -168,17 +152,20 @@ void *produce_thread(void *threadid)
     pthread_exit(NULL);
 }
 
-double hist_avg_sample[HIST_INP_SAMPLE];
-//return # of detected gesture
-int detectGesture()
+//return number of detected gesture
+int detectGesture(bool hold)
 {
+	static double hist_avg_sample[HIST_INP_SAMPLE]; //remember history
     double avg = 0.0;
+    
+    //calculate avg vector of previous samples
     for(int i=1; i<HIST_INP_SAMPLE; i++)
     {
         avg+=hist_avg_sample[i-1] - hist_avg_sample[i];
         hist_avg_sample[i-1] = hist_avg_sample[i];
     }
 
+	//add value with new sample
     double new_avg = 0.00;
     uint16_t mask=1;
     int pins_touched = 0;
@@ -192,32 +179,28 @@ int detectGesture()
         }
         mask <<= 1;
     }
-    //if(pins_touched > 0)  //avoid nan as result
-    if(true)
-    {
-        new_avg = (double)new_avg/pins_touched;
-        avg += hist_avg_sample[HIST_INP_SAMPLE -1] - new_avg;
-        hist_avg_sample[HIST_INP_SAMPLE-1] = new_avg;
-    }
-    else
-    {
-        hist_avg_sample[HIST_INP_SAMPLE-1] = 0.0;
-    }
-
-    //if(DEBUG)
+    
+    //if(pins_touched > 0)  //avoid nan as result - slower release detection
     //{
-        //cout << " avg" << avg <<" ";
+	new_avg = (double)new_avg/pins_touched;
+	avg += hist_avg_sample[HIST_INP_SAMPLE -1] - new_avg;
+	hist_avg_sample[HIST_INP_SAMPLE-1] = new_avg;
+    //}
+    //else
+    //{
+    //    hist_avg_sample[HIST_INP_SAMPLE-1] = 0.0;
     //}
 
-    if(avg<0.0)
+    if(avg<0.0 && !hold)
         return 1;
-    else if(avg>0.0)
+    else if(avg>0.0 && !hold)
         return 2;
     else
         return 0;
 }
 
-void update_hist(uint16_t *hist) // update history to new value from inputs
+// update history to new value from inputs
+void update_hist(uint16_t *hist) 
 {
     for(int i=1; i<HIST_INP_SAMPLE; i++)
     {
@@ -226,19 +209,18 @@ void update_hist(uint16_t *hist) // update history to new value from inputs
     hist[HIST_INP_SAMPLE -1] = touched;
 }
 
-bool detectHold(uint16_t *hist) //detect when  stick is held
+//detect when  stick is held - if any pin is pressed >= HIST_INP_SAMPLE
+bool detectHold(uint16_t *hist) 
 {
     bool hold = true;
     uint16_t mask;
-    int i, j;
-
     update_hist(hist);
 
-    for(j=0; j<MPR121_NUM_INPUTS; j++)
+    for(int j=0; j<MPR121_NUM_INPUTS; j++)
     {
         hold=true;
         mask = 1 << j;
-        for(i=0; i<HIST_INP_SAMPLE; i++)
+        for(int i=0; i<HIST_INP_SAMPLE; i++)
         {
             if(0 == (hist[i] & mask))
             {
@@ -251,10 +233,7 @@ bool detectHold(uint16_t *hist) //detect when  stick is held
             break;
         }
     }
-    //if (DEBUG)
-    //{
-        //cout << " hold" <<  hold << " ";
-    //}
+    
     return hold;
 }
 
@@ -282,36 +261,34 @@ int main()
     }
 
     uint16_t gesture;
-    uint16_t hold;
+    bool hold;
 
-    while(true)
+    while(pthread_kill(&sense,0) == 0 && pthread_kill(&produce,0) == 0)
     {
-        gesture = detectGesture(); // get gesture #
-        global_current_gesture = gesture; //TODO TOO SIMPLIFIED!!!!
+		hold = detectHold(hist); // detect if user is holding a stick
+        gesture = detectGesture(hold); // get gesture #
+        // TODO: get info from joystick and calculate pitch
+
+		global_current_gesture = gesture;
         
-        hold = detectHold(hist); // detect if user is holding a stick
-
-        // TODO: get info from joystick and generate suitable  pitch
-        // TODO: playSound(gesture, pitch)
-
-        // recognize gesture
-        if(gesture == 1 && !hold)
-        {
-            //TODO: make sound
-            cout << " Premik gor\n";
-        }
-        else if(gesture == 2 && !hold)
-        {
-            //TODO: make sound
-            cout << " Premik dol\n";
-        }
-        else if(hold)
-            cout << "Zaznavam drzanje!\n";
-
+        //// recognize gesture
+        //if(gesture == 1 && !hold)
+        //{
+            //cout << " Premik gor\n";
+        //}
+        //else if(gesture == 2 && !hold)
+        //{
+            //cout << " Premik dol\n";
+        //}
+        //else if(hold){
+			//cout << "Zaznavam drzanje!\n";
+		//}
 
         usleep(MICRO_S_SLEEP);
 
     }
+    
+    //TODO at least one of threads died.. why?
 
     pthread_exit(NULL);
 }
