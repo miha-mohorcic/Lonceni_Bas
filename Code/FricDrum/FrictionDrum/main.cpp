@@ -210,8 +210,9 @@ void update_hist(uint16_t *hist)
 }
 
 //detect when  stick is held - if any pin is pressed >= HIST_INP_SAMPLE
-bool detectHold(uint16_t *hist) 
+bool detectHold() 
 {
+	static uint16_t hist[HIST_INP_SAMPLE] = {0};
     bool hold = true;
     uint16_t mask;
     update_hist(hist);
@@ -253,22 +254,14 @@ int main()
         cout << "Error: Could not start produce_thread!\n" ;
     }
 
-    //Calculates vector of average movement
-    uint16_t hist[HIST_INP_SAMPLE] = {0};
-    for (int i = 0; i<HIST_INP_SAMPLE; i++)
-    {
-        hist_avg_sample[i]=0.0;
-    }
-
-    uint16_t gesture;
+    int gesture;
     bool hold;
 
-    while(pthread_kill(&sense,0) == 0 && pthread_kill(&produce,0) == 0)
+    while( (pthread_kill(sense,0) == 0 ) && (pthread_kill(produce,0) == 0) )
     {
-		hold = detectHold(hist); // detect if user is holding a stick
+		hold = detectHold(); // detect if user is holding a stick
         gesture = detectGesture(hold); // get gesture #
         // TODO: get info from joystick and calculate pitch
-
 		global_current_gesture = gesture;
         
         //// recognize gesture
