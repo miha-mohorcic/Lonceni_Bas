@@ -35,7 +35,10 @@ void *sense_thread(void *threadid)
     else
     {
         cout << "MPR121 not OK,\nStopping sense thread!" << endl;
-        pthread_exit(NULL);
+        cout << "There was and issue reading correct value from "
+			"one of the registers (should be 0x04)" << endl << endl;
+        
+		pthread_exit(NULL); //exit (main thread handles lack of data!
     }
 
     while(true) //constantly check input status and remember time from last change
@@ -43,7 +46,6 @@ void *sense_thread(void *threadid)
         touched = senzor.getTouchStatus();
         usleep(MICRO_S_SLEEP);
     }
-    //TODO: Notify main thread
     pthread_exit(NULL); //if for some reason we fall out of loop (graceful exit)
 }
 
@@ -80,7 +82,7 @@ void *produce_thread(void *threadid)
 	//initialize SDL_AUDIO
 	if(SDL_Init(SDL_INIT_AUDIO) < 0){
 		cout << "SDL NOT INITIALIZED!\n" << SDL_GetError()  << endl;
-		//TODO gracefully close application
+		pthread_exit(NULL); //exit (main thread handles lack of sound!)
 	}
 	
 	SDL_AudioSpec audio_spec; //spec file used to get audio info
@@ -94,7 +96,7 @@ void *produce_thread(void *threadid)
 	SDL_LoadWAV(file_tap,&audio_spec,&sound_buf[3],&sound_len[3]) == NULL )
 	{
 		cout << "ERROR OPENING FILES!\n" << SDL_GetError() << endl;
-		//TODO gracefully close application
+		pthread_exit(NULL); //exit (main thread handles lack of sound!)
 	}
 	
 	sound_len[0] = sound_len[1]; //define silence sound (fill 0s)
@@ -111,7 +113,7 @@ void *produce_thread(void *threadid)
 	if(  SDL_OpenAudio(&audio_spec, NULL) <  0)
 	{
 		cout << "FAILED OPENING AUDIO DEVICE!\n" << SDL_GetError() << endl ;
-		//TODO gracefully close application
+		pthread_exit(NULL); //exit (main thread handles lack of sound!)
 	}
 		
 	//start playing sound
@@ -238,7 +240,6 @@ bool detectHold()
     return hold;
 }
 
-
 int main()
 {
     int re1 = 0, re2 = 0;
@@ -281,7 +282,22 @@ int main()
 
     }
     
-    //TODO at least one of threads died.. why?
+    //If here -> somehow we fell out of while(t) loop, close everything that might be running. 
+    // Usually that would mean one of the threads died... 
 
+	if(pthread_kill(sense,0) != 0 ){
+		cout << "Sense thread died! Sending SigKill to produce thread!\nCheck output for what happened!" << endl;
+		pthread_kill(produce,9);
+	}else if(pthread_kill(produce,0) != 0 )
+	{
+		cout << "Produce thread died! Sending SigKill to sense thread!\nCheck output for what happened!" << endl;
+		pthread_kill(sense,9);
+	}else
+	{
+		cout << "Both threads are alive! Something went wrong. Check output or check for errors elsewhere!" << endl;
+		cout << "Killing both threads and exiting!" << endl;
+		pthread_kill(sense,9);
+		pthread_kill(produce,9);
+	}
     pthread_exit(NULL);
 }
