@@ -177,8 +177,8 @@ THE SOFTWARE.
 
 // Other Constants
 // these are suggested values from app note 3944
-#define TOUCH_THRESHOLD   0x0F
-#define RELEASE_THRESHOLD 0x0A
+#define TOUCH_THRESHOLD   0x04
+#define RELEASE_THRESHOLD 0x03
 #define NUM_CHANNELS      12
 
 class MPR121
@@ -201,6 +201,9 @@ class MPR121
 
     // returns true if the device is responding on the I2C bus
     bool testConnection();
+    
+    //workaround for our data --> Miha
+    void writeByteDirectly(uint8_t data, uint8_t reg);
 
     // getTouchStatus returns the touch status for the given channel (0 - 11)
     bool getTouchStatus(uint8_t channel);

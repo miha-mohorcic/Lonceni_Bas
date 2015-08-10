@@ -130,7 +130,7 @@ void MPR121::initialize()
   I2Cdev::writeByte(m_devAddr, ELE11_RELEASE_THRESHOLD, RELEASE_THRESHOLD);
 
   //ADDED BY MIHA & KARMEN  to reduce random hangs
-  I2Cdev::writeByte(m_devAddr, DEBOUNCE_TOUCH_AND_RELEASE, 0x44);
+  //I2Cdev::writeByte(m_devAddr, DEBOUNCE_TOUCH_AND_RELEASE, 0x00);
 
   // Section D
   // Description:
@@ -146,7 +146,21 @@ void MPR121::initialize()
   //   the time, 0x04 results in the best compromise between power
   //   consumption and response time.
   I2Cdev::writeByte(m_devAddr, FILTER_CONFIG, 0x04);
-
+  
+  // Section F
+  // Description:
+  //   These are the settings used for the Auto Configuration.  They enable
+  //   AUTO-CONFIG and AUTO_RECONFIG.  In addition, they set the target
+  //   rate for the baseline.  The upper limit is set to 190, the target
+  //   is set to 180 and the lower limit is set to 140.
+  // Variation:
+  //   In most cases these values will never need to be changed, but if
+  //   a case arises, a full description is found in application note AN3889.
+  I2Cdev::writeByte(m_devAddr, AUTO_CONFIG_CONTROL_0,    0x0B);
+  I2Cdev::writeByte(m_devAddr, AUTO_CONFIG_USL,          0x9C);
+  I2Cdev::writeByte(m_devAddr, AUTO_CONFIG_LSL,          0x65);
+  I2Cdev::writeByte(m_devAddr, AUTO_CONFIG_TARGET_LEVEL, 0x8C);
+  
   // Section E
   // Description:
   //   This register controls the number of electrodes being enabled
@@ -163,20 +177,6 @@ void MPR121::initialize()
   //   to be written when the mode is changed from Standby to Run or vice versa.
   I2Cdev::writeByte(m_devAddr, ELECTRODE_CONFIG, 0x0C);
 
-  // Section F
-  // Description:
-  //   These are the settings used for the Auto Configuration.  They enable
-  //   AUTO-CONFIG and AUTO_RECONFIG.  In addition, they set the target
-  //   rate for the baseline.  The upper limit is set to 190, the target
-  //   is set to 180 and the lower limit is set to 140.
-  // Variation:
-  //   In most cases these values will never need to be changed, but if
-  //   a case arises, a full description is found in application note AN3889.
-  //I2Cdev::writeByte(m_devAddr, AUTO_CONFIG_CONTROL_0,    0x0B);
-  //I2Cdev::writeByte(m_devAddr, AUTO_CONFIG_USL,          0x9C);
-  //I2Cdev::writeByte(m_devAddr, AUTO_CONFIG_LSL,          0x65);
-  //I2Cdev::writeByte(m_devAddr, AUTO_CONFIG_TARGET_LEVEL, 0x8C);
-
 }
 
 // check to see if the filter configuration register contains 0x04,
@@ -185,6 +185,10 @@ bool MPR121::testConnection() {
   uint8_t buf = 0;
   I2Cdev::readByte(m_devAddr, FILTER_CONFIG, &buf);
   return buf == 0x04; // default value, we don't change
+}
+
+void MPR121::writeByteDirectly(uint8_t data, uint8_t reg){
+	I2Cdev::writeByte(m_devAddr, data, reg);
 }
 
 bool MPR121::getTouchStatus(uint8_t channel) {
