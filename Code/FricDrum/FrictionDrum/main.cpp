@@ -167,6 +167,7 @@ void *produce_thread(void *threadid)
 				audio_pos = sound_buf[current_gesture];
 				SDL_UnlockAudio();
 
+
 				prev_gesture = current_gesture;
 			}
 			usleep(MICRO_S_SLEEP /2);
