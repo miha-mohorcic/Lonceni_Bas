@@ -13,14 +13,14 @@
 #include "mcp3004.h"
 
 #include "include/MPR121.h"
-#include "soundtouch/SoundTouch.h"
+#include <soundtouch/SoundTouch.h>
 #include "SDL2/SDL.h"
 
 #define MPR121_NUM_INPUTS 12    // number of inputs on MPR121 used
 #define HIST_INP_SAMPLE 10      // number of samples used for history of touches
 #define HIST_INP_HOLD_SAMPLE 20 // number of samples used for hold detection
 #define MICRO_S_SLEEP 25000     // micro seconds of sleep between samples
-#define AUDIO_BUFFER_SIZE 50000 // audio buffer size
+#define AUDIO_BUFFER_SIZE 500000 // audio buffer size
 
 uint16_t touched = 0; // global bitwise status of currently active inputs
 uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
@@ -58,7 +58,10 @@ void *sense_thread(void *threadid)
 		// on MCP 3008 -> pin0 = pressed, pin1 = x direction, pin2 = y direction
 		//analogRead(100); //read jostick pressed status (not needed)
 		joystick_x = analogRead(101); //read joystick x pitch
-		joystick_y = analogRead(102); //read joysticvk y pitch
+		joystick_y = analogRead(102); //read joystick y pitch
+		
+		//cout << "X: " << joystick_x << " Y: " << joystick_y << endl;
+		
         touched = senzor.getTouchStatus();
         usleep(MICRO_S_SLEEP);
         
@@ -81,8 +84,8 @@ SoundTouch soundt;
 	
 //SDL audio callback - plays wave found at audio_pos 
 void my_audio_callback(void *userdata, Uint8 *stream, int len){
-	//soundt.setChannels((uint)2);
-	//soundt.setSampleRate((uint)44100);
+	soundt.setChannels((uint)2);
+	soundt.setSampleRate((uint)44100);
 	
 	if(audio_len == 0)
 		return;
@@ -92,8 +95,8 @@ void my_audio_callback(void *userdata, Uint8 *stream, int len){
 	//  check joystick_x & joystick_y (between 1-1023) and decide on the pitch
 	// cout << "x: " << joystick_x << " y: " << joystick_y << endl; 
 	float pitch = ((float)(512.0 / joystick_x))*4.0;
-	//soundt.setPitch( (float)pitch);
-	//soundt.putSamples( (float *) audio_pos,(uint) len);
+	soundt.setPitch( (float)pitch);
+	soundt.putSamples( (float *) audio_pos,(uint) len);
 	int nSamples = soundt.receiveSamples((float *) audio_buffer, (uint) AUDIO_BUFFER_SIZE);
 	
 	SDL_memcpy (stream, audio_buffer, nSamples); 	//substitute stream
