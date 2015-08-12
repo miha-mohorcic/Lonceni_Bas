@@ -143,8 +143,11 @@ void *produce_thread(void *threadid)
 			current_gesture = global_current_gesture;
 			if(prev_gesture != current_gesture)
 			{
-				//TODO: READ JOYSTICK AND CORRECT PITCH HERE 
+							
+				double pitch = math.sqrt(math.pow(joystick_x,2)+math.pow(joystick_y,2));
+				pitch = pitch/512.0;
 				
+				//TODO: USE SOUNDTOUCH TO CORRECT PITCH HERE
 				
 				
 				SDL_LockAudio();
