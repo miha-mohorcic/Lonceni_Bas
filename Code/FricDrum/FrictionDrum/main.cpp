@@ -50,27 +50,21 @@ void *sense_thread(void *threadid)
         cout << " There was and issue reading correct value from "
 			"one of the registers (should be 0x04)" << endl << endl;
 
-	pthread_exit(NULL); //exit (main thread handles lack of data!
+		pthread_exit(NULL); //exit (main thread handles lack of data!
     }
-	int passes = 0;
+	
     while(true) //constantly check input status and remember time from last change
     {
 		// on MCP 3008 -> pin0 = pressed, pin1 = x direction, pin2 = y direction
 		//analogRead(100); //read jostick pressed status (not needed)
 		joystick_x = analogRead(101); //read joystick x pitch
 		joystick_y = analogRead(102); //read joystick y pitch
-		
 		//cout << "X: " << joystick_x << " Y: " << joystick_y << endl;
 		
         touched = senzor.getTouchStatus();
         usleep(MICRO_S_SLEEP);
-        
-        passes++; //workaround for hangups of MPR121
-        if(passes == 200000){ //every n seconds make sure that MPR121 is alive 
-			senzor.writeByteDirectly(0x0C, 0x5E);
-			passes =0;
-		}
     }
+    
     cout << " Sense thread dying!" << endl;
     pthread_exit(NULL); //if for some reason we fall out of loop (graceful exit)
 }
@@ -78,28 +72,15 @@ void *sense_thread(void *threadid)
 Uint8 *audio_pos;
 Uint32 audio_len;
 int global_current_gesture;
-
-Uint8 *audio_buffer[AUDIO_BUFFER_SIZE] = {0};
-SoundTouch soundt;
 	
 //SDL audio callback - plays wave found at audio_pos 
 void my_audio_callback(void *userdata, Uint8 *stream, int len){
-	soundt.setChannels((uint)2);
-	soundt.setSampleRate((uint)44100);
 	
 	if(audio_len == 0)
 		return;
 	len = (len > audio_len ? audio_len : len );	
-
-	//  TODO: HERE BEFORE COMPYING INTO MEMORY SEND TO TOUCHSOUND TO ADJUST PITCH!
-	//  check joystick_x & joystick_y (between 1-1023) and decide on the pitch
-	// cout << "x: " << joystick_x << " y: " << joystick_y << endl; 
-	float pitch = ((float)(512.0 / joystick_x))*4.0;
-	soundt.setPitch( (float)pitch);
-	soundt.putSamples( (float *) audio_pos,(uint) len);
-	int nSamples = soundt.receiveSamples((float *) audio_buffer, (uint) AUDIO_BUFFER_SIZE);
 	
-	SDL_memcpy (stream, audio_buffer, nSamples); 	//substitute stream
+	SDL_memcpy (stream, audio_pos, audio_len); 	//substitute stream
 	//SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME); //mix with existing stream
 
 	audio_pos += len;
@@ -162,11 +143,14 @@ void *produce_thread(void *threadid)
 			current_gesture = global_current_gesture;
 			if(prev_gesture != current_gesture)
 			{
+				//TODO: READ JOYSTICK AND CORRECT PITCH HERE 
+				
+				
+				
 				SDL_LockAudio();
 				audio_len = sound_len[current_gesture];
 				audio_pos = sound_buf[current_gesture];
 				SDL_UnlockAudio();
-
 
 				prev_gesture = current_gesture;
 			}
@@ -174,7 +158,6 @@ void *produce_thread(void *threadid)
 		}
 
 		//in case sample ends, continue with flat wave
-		//TODO: talk about continuing with same sample?
 		SDL_LockAudio();
 		audio_len = sound_len[0];
 		audio_pos = sound_buf[0];
