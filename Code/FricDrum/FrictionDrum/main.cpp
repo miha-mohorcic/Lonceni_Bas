@@ -29,17 +29,17 @@ using namespace soundtouch;
 using namespace std;
 
 //MPR121 thread updating status of touched pins
-void *sense_thread(void *threadid)
-{
+
+MPR121 sense_initialize(){
 	cout << " Initializing wiringPi and MCP3008 headers" << endl;
 	wiringPiSetup();
 	mcp3004Setup(100,0);
 	
 	cout << " Initalizing MPR121" << endl;
-    MPR121 senzor = MPR121(); //initalizing MPR121
+    MPR121 senzor = MPR121();
     senzor.initialize();
 
-    if (senzor.testConnection()) //testing MPR connection (checks register)
+    if (senzor.testConnection())
     {
         cout << " MPR121 OK,   \n Starting sense thread!" << endl;
     }
@@ -48,25 +48,26 @@ void *sense_thread(void *threadid)
         cout << " MPR121 not OK,\nStopping sense thread!" << endl;
         cout << " There was and issue reading correct value from "
 			"one of the registers (should be 0x04)" << endl << endl;
-
-		pthread_exit(NULL); //exit (main thread handles lack of data!
+		pthread_exit(NULL);
     }
-	
-    while(true) //constantly check input status and remember time from last change
+    return senzor;
+}
+
+void *sense_thread(void *threadid)
+{
+	MPR121 senzor = sense_initialize();
+    while(true)
     {
-		//analogRead(100); //read jostick pressed status (not needed)
+		//analogRead(100); //read jostick pressed status
 		joystick_x = analogRead(101); //read joystick x pitch
 		joystick_y = analogRead(102); //read joystick y pitch
-		
-        touched = senzor.getTouchStatus();
+        touched = senzor.getTouchStatus(); //read MPR
         
         //cout << "X: " <<joystick_x<< " Y: " << joystick_y << " t: " << touched << endl;
-        
         usleep(MICRO_S_SLEEP);
     }
-    
     cout << " Sense thread dying!" << endl;
-    pthread_exit(NULL); //if for some reason we fall out of loop (graceful exit)
+    pthread_exit(NULL);
 }
 
 Uint8 *audio_pos;
@@ -75,7 +76,6 @@ int global_current_gesture;
 	
 //SDL audio callback - plays wave found at audio_pos 
 void my_audio_callback(void *userdata, Uint8 *stream, int len){
-	
 	if(audio_len == 0)
 		return;
 	len = (len > audio_len ? audio_len : len );	
@@ -87,11 +87,8 @@ void my_audio_callback(void *userdata, Uint8 *stream, int len){
 	audio_len -= len;
 }
 
-//Loading wav files, checking current events and playing corresponding sound
-void *produce_thread(void *threadid)
-{
+void produce_initialize(Uint32* sound_len, Uint8** sound_buf, SDL_AudioSpec* audio_spec){
 	cout << "  Reading and initializing media files." << endl;
-	//names of files used for sound
 	char const *file_up = "C.wav"; //what to play on gesture up
 	char const *file_down = "D.wav"; //what to play on gesture down
 	char const *file_tap = "E.wav"; //what to play on top tap 
@@ -99,18 +96,13 @@ void *produce_thread(void *threadid)
 	//initialize SDL_AUDIO
 	if(SDL_Init(SDL_INIT_AUDIO) < 0){
 		cout << "  SDL NOT INITIALIZED!\n" << SDL_GetError()  << endl;
-		pthread_exit(NULL); //exit (main thread handles lack of sound!)
+		pthread_exit(NULL); 
 	}
-
-	SDL_AudioSpec audio_spec; //spec file used to get audio info
-
-	Uint32 sound_len[4]; // silence, up, down, tap in order of array
-	Uint8 **sound_buf = (Uint8 **)calloc(4, sizeof(Uint8 *));
-
+	
 	//loading wav files
-	if(	SDL_LoadWAV(file_up,&audio_spec,&sound_buf[1],&sound_len[1]) == NULL ||
-	SDL_LoadWAV(file_down,&audio_spec,&sound_buf[2],&sound_len[2]) == NULL ||
-	SDL_LoadWAV(file_tap,&audio_spec,&sound_buf[3],&sound_len[3]) == NULL )
+	if(	SDL_LoadWAV(file_up,audio_spec,&sound_buf[1],&sound_len[1]) == NULL ||
+	SDL_LoadWAV(file_down,audio_spec,&sound_buf[2],&sound_len[2]) == NULL ||
+	SDL_LoadWAV(file_tap,audio_spec,&sound_buf[3],&sound_len[3]) == NULL )
 	{
 		cout << "  ERROR OPENING FILES!\n" << SDL_GetError() << endl;
 		pthread_exit(NULL); //exit (main thread handles lack of sound!)
@@ -120,8 +112,19 @@ void *produce_thread(void *threadid)
 	sound_buf[0] = (Uint8 *)calloc(sound_len[1], sizeof(Uint8));
 
 	//set spec file
-	audio_spec.callback = my_audio_callback;
-	audio_spec.userdata = NULL;
+	(*audio_spec).callback = my_audio_callback;
+	(*audio_spec).userdata = NULL;
+
+}
+
+//Loading wav files, checking current events and playing corresponding sound
+void *produce_thread(void *threadid)
+{
+	SDL_AudioSpec audio_spec; //spec file used to get audio info
+	Uint32 sound_len[4]; // silence, up, down, tap in order of array
+	Uint8 **sound_buf = (Uint8 **)calloc(4, sizeof(Uint8 *));
+
+	produce_initialize(sound_len, sound_buf, &audio_spec);
 
 	//Start playing flat wave
 	audio_pos = sound_buf[0];
@@ -130,12 +133,11 @@ void *produce_thread(void *threadid)
 	if(  SDL_OpenAudio(&audio_spec, NULL) <  0)
 	{
 		cout << "  FAILED OPENING AUDIO DEVICE!\n" << SDL_GetError() << endl ;
-		pthread_exit(NULL); //exit (main thread handles lack of sound!)
+		pthread_exit(NULL);
 	}
-
-	//start playing sound
 	SDL_PauseAudio(0);
 
+	//adapt currently playing sample
 	int prev_gesture = 0;
 	int current_gesture = 0;
 	while(true){
@@ -166,7 +168,6 @@ void *produce_thread(void *threadid)
 	}
 
 	cout << "  Produce thread dying!" << endl;
-	//in case program falls here: close everything
 	SDL_CloseAudio();
 	SDL_FreeWAV(sound_buf[0]);
 	SDL_FreeWAV(sound_buf[1]);
