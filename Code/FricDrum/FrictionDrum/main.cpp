@@ -6,7 +6,7 @@
 #include <iostream>
 #include <string>
 #include <unistd.h>
-
+#include <math.h>
 #include <pthread.h>
 
 #include "wiringPi.h"
@@ -20,7 +20,6 @@
 #define HIST_INP_SAMPLE 10      // number of samples used for history of touches
 #define HIST_INP_HOLD_SAMPLE 20 // number of samples used for hold detection
 #define MICRO_S_SLEEP 25000     // micro seconds of sleep between samples
-#define AUDIO_BUFFER_SIZE 500000 // audio buffer size
 
 uint16_t touched = 0; // global bitwise status of currently active inputs
 uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
@@ -55,13 +54,14 @@ void *sense_thread(void *threadid)
 	
     while(true) //constantly check input status and remember time from last change
     {
-		// on MCP 3008 -> pin0 = pressed, pin1 = x direction, pin2 = y direction
 		//analogRead(100); //read jostick pressed status (not needed)
 		joystick_x = analogRead(101); //read joystick x pitch
 		joystick_y = analogRead(102); //read joystick y pitch
-		//cout << "X: " << joystick_x << " Y: " << joystick_y << endl;
 		
         touched = senzor.getTouchStatus();
+        
+        //cout << "X: " <<joystick_x<< " Y: " << joystick_y << " t: " << touched << endl;
+        
         usleep(MICRO_S_SLEEP);
     }
     
@@ -80,7 +80,7 @@ void my_audio_callback(void *userdata, Uint8 *stream, int len){
 		return;
 	len = (len > audio_len ? audio_len : len );	
 	
-	SDL_memcpy (stream, audio_pos, audio_len); 	//substitute stream
+	SDL_memcpy (stream, audio_pos, len); 	//substitute stream
 	//SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME); //mix with existing stream
 
 	audio_pos += len;
@@ -143,12 +143,9 @@ void *produce_thread(void *threadid)
 			current_gesture = global_current_gesture;
 			if(prev_gesture != current_gesture)
 			{
-							
-				double pitch = math.sqrt(math.pow(joystick_x,2)+math.pow(joystick_y,2));
-				pitch = pitch/512.0;
 				
+				double pitch = sqrt(pow((double)joystick_x,2.0)+pow((double)joystick_y,2.0));
 				//TODO: USE SOUNDTOUCH TO CORRECT PITCH HERE
-				
 				
 				SDL_LockAudio();
 				audio_len = sound_len[current_gesture];
@@ -229,9 +226,8 @@ int detectGesture(bool hold)
 void update_hist(uint16_t *hist) 
 {
     for(int i=1; i<HIST_INP_HOLD_SAMPLE; i++)
-    {
         hist[i-1]=hist[i];
-    }
+    
     hist[HIST_INP_HOLD_SAMPLE -1] = touched;
 }
 
@@ -270,46 +266,20 @@ int main()
     //runs threads for touch detection and sound generation
     pthread_t sense, produce;
     if(pthread_create(&sense, NULL, sense_thread, (void *)re1))
-    {
         cout << "Error: Could not start sense_thread!\n" ;
-    }
 
     if(pthread_create(&produce, NULL, produce_thread, (void *)re2))
-    {
-        cout << "Error: Could not start produce_thread!\n" ;
-    }
+		cout << "Error: Could not start produce_thread!\n" ;
 
-    int gesture;
     bool hold;
-
     while( (pthread_kill(sense,0) == 0 ) && (pthread_kill(produce,0) == 0) )
     {
 		hold = detectHold(); // detect if user is holding a stick
 		
-        gesture = detectGesture(hold); // get gesture #
-		global_current_gesture = gesture;
-
-        // recognize gesture
-        /** //remove comments if you want to know which gesture
-        if(gesture == 1 && !hold)
-        {
-            cout << " Premik gor\n";
-        }
-        else if(gesture == 2 && !hold)
-        {
-            cout << " Premik dol\n";
-        }
-        else if(hold){
-	    cout << "Zaznavam drzanje!\n";
-		}
-		**/
-
+        global_current_gesture = detectGesture(hold); // get gesture #
+		
         usleep(MICRO_S_SLEEP);
-
     }
-
-    //If here -> somehow we fell out of while(t) loop, close everything that might be running.
-    // Usually that would mean one of the threads died...
 
 	if(pthread_kill(sense,0) != 0 ){
 		cout << "Sense thread died! Sending SigKill to produce thread!\nCheck output for what happened!" << endl;
