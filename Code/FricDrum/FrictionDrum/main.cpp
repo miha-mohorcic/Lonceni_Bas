@@ -21,6 +21,8 @@
 #define HIST_INP_HOLD_SAMPLE 20 // number of samples used for hold detection
 #define MICRO_S_SLEEP 25000     // micro seconds of sleep between samples
 
+#define ST_BUFFER_SIZE 44100 	// soundtouch buffer size
+
 uint16_t touched = 0; //global bitwise status of currently active inputs
 uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
 uint16_t joystick_y = 0; //global position of joystick y direction -> between 1-1023
@@ -144,6 +146,15 @@ void *produce_thread(void *threadid)
 	//let the callback function play the audio chunk
 	SDL_PauseAudio(0);
 
+
+	//samples have to have 2 channels and 44100Hz samplerate!
+	Uint8 soundtouch_buffer[ST_BUFFER_SIZE];
+	Uint32 soundtouch_len = ST_BUFFER_SIZE / 2;
+	SoundTouch stouch;
+	stouch.setSampleRate((int)44100);
+	stouch.setChannels((int)2);
+	int nSamples = 0;
+	
 	//adapt currently playing sample
 	int prev_gesture = 0;
 	int current_gesture = 0;
@@ -155,12 +166,17 @@ void *produce_thread(void *threadid)
 			
 			if(prev_gesture != current_gesture)
 			{
-				double pitch = sqrt(pow((double)joystick_x, 2.0) + pow((double)joystick_y, 2.0));
-				//TODO: USE SOUNDTOUCH TO CORRECT PITCH HERE
+				float pitch = sqrt(pow((double)joystick_x, 2.0) + pow((double)joystick_y, 2.0));
+				pitch =10.0*(pitch/512.0); //0.0-1.99 -1
 				
+				//TODO: USE SOUNDTOUCH TO CORRECT PITCH HERE
+				stouch.setPitchSemiTones(pitch);
+				stouch.putSamples((float*)sound_buf[current_gesture],(uint)sound_len[current_gesture]);
+				nSamples = stouch.receiveSamples((float*)soundtouch_buffer,(uint)soundtouch_len);
+								
 				SDL_LockAudio();
-				audio_len = sound_len[current_gesture];
-				audio_pos = sound_buf[current_gesture];
+				audio_len = nSamples;
+				audio_pos = soundtouch_buffer;
 				SDL_UnlockAudio();
 
 				prev_gesture = current_gesture;
@@ -179,8 +195,7 @@ void *produce_thread(void *threadid)
 	cout << "  Produce thread dying!" << endl;
 	SDL_CloseAudio();
 	
-	int i = 0;
-	for (i = 0; i < 4; i++) 
+	for (int i = 0; i < 4; i++) 
 		SDL_FreeWAV(sound_buf[i]);
 	
     pthread_exit(NULL);
