@@ -148,8 +148,9 @@ void *produce_thread(void *threadid)
 
 
 	//samples have to have 2 channels and 44100Hz samplerate!
-	Uint8 soundtouch_buffer[ST_BUFFER_SIZE];
-	Uint32 soundtouch_len = ST_BUFFER_SIZE / 2;
+	float soundtouch_buffer[ST_BUFFER_SIZE];
+	Uint8 soundtouch_buffer2[ST_BUFFER_SIZE];
+	int soundtouch_len = ST_BUFFER_SIZE / 2;
 	SoundTouch stouch;
 	stouch.setSampleRate((int)44100);
 	stouch.setChannels((int)2);
@@ -158,6 +159,7 @@ void *produce_thread(void *threadid)
 	//adapt currently playing sample
 	int prev_gesture = 0;
 	int current_gesture = 0;
+	int temp_min = 0;
 	while(true) 
 	{
 		while(audio_len > 0)
@@ -169,18 +171,22 @@ void *produce_thread(void *threadid)
 				float pitch = sqrt(pow((double)joystick_x, 2.0) + pow((double)joystick_y, 2.0));
 				pitch = 10.0*(pitch/512.0); //0.0-1.99 -1
 				
-				//TODO: USE SOUNDTOUCH TO CORRECT PITCH HERE
-				cout << "woo";
 				stouch.setPitchSemiTones(pitch);
-				cout << "hoo" << endl;
-				stouch.putSamples(sound_buf[current_gesture],(uint)sound_len[current_gesture]);
-				cout << "block" << endl;
+				temp_min = ((ST_BUFFER_SIZE < sound_len[current_gesture]) ? ST_BUFFER_SIZE : sound_len[current_gesture]);
+				for(int i=0; i< temp_min;i++){
+					soundtouch_buffer[i] = (float) sound_buf[current_gesture][i];
+				}
+				
+				stouch.putSamples(soundtouch_buffer,(uint)sound_len[current_gesture]);
 				nSamples = stouch.receiveSamples(soundtouch_buffer,(uint)soundtouch_len);
-				cout << "here" << "endl";
+				
+				for(int i=0; i< nSamples;i++){
+					soundtouch_buffer2[i] = (Uint8) soundtouch_buffer2[i];
+				}
 				
 				SDL_LockAudio();
 				audio_len = nSamples;
-				audio_pos = soundtouch_buffer;
+				audio_pos = soundtouch_buffer2;
 				SDL_UnlockAudio();
 
 				prev_gesture = current_gesture;
