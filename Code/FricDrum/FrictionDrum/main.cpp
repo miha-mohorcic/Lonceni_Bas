@@ -167,13 +167,17 @@ void *produce_thread(void *threadid)
 			if(prev_gesture != current_gesture)
 			{
 				float pitch = sqrt(pow((double)joystick_x, 2.0) + pow((double)joystick_y, 2.0));
-				pitch =10.0*(pitch/512.0); //0.0-1.99 -1
+				pitch = 10.0*(pitch/512.0); //0.0-1.99 -1
 				
 				//TODO: USE SOUNDTOUCH TO CORRECT PITCH HERE
+				cout << "woo";
 				stouch.setPitchSemiTones(pitch);
-				stouch.putSamples((float*)sound_buf[current_gesture],(uint)sound_len[current_gesture]);
-				nSamples = stouch.receiveSamples((float*)soundtouch_buffer,(uint)soundtouch_len);
-								
+				cout << "hoo" << endl;
+				stouch.putSamples(sound_buf[current_gesture],(uint)sound_len[current_gesture]);
+				cout << "block" << endl;
+				nSamples = stouch.receiveSamples(soundtouch_buffer,(uint)soundtouch_len);
+				cout << "here" << "endl";
+				
 				SDL_LockAudio();
 				audio_len = nSamples;
 				audio_pos = soundtouch_buffer;
@@ -248,15 +252,15 @@ int detectGesture()
 	}
 	
     if(avg < 0.0) {
-        cout << "1" << endl;
+        //cout << "1" << endl;
         return 1;
     }
     else if(avg > 0.0) {
-        cout << "2" << endl;
+        //cout << "2" << endl;
         return 2;
     }
 	else if (tap) {
-		cout << "Tap!" << endl;
+		//cout << "Tap!" << endl;
 		return 3;
 	}
     else
