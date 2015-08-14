@@ -165,8 +165,7 @@ void *produce_thread(void *threadid)
 
 				prev_gesture = current_gesture;
 			}
-			//usleep(MICRO_S_SLEEP /2);
-			SDL_Delay(MICRO_S_SLEEP/2);
+			usleep(MICRO_S_SLEEP /2);
 		}
 
 		//in case sample ends, continue with flat wave
@@ -188,7 +187,7 @@ void *produce_thread(void *threadid)
 }
 
 //return number of detected gesture (0: silence, 1: up, 2: down, 3: tap)
-int detectGesture(bool hold)
+int detectGesture()
 {
 	static double hist_avg_sample[HIST_INP_SAMPLE]; //remember history
     double avg = 0.0;
@@ -233,10 +232,14 @@ int detectGesture(bool hold)
 		mask <<= 1;
 	}
 	
-    if(avg < 0.0 && !hold)
+    if(avg < 0.0) {
+        cout << "1" << endl;
         return 1;
-    else if(avg > 0.0 && !hold)
+    }
+    else if(avg > 0.0) {
+        cout << "2" << endl;
         return 2;
+    }
 	else if (tap) {
 		cout << "Tap!" << endl;
 		return 3;
@@ -304,7 +307,8 @@ int main()
     {
 		hold = detectHold(); // detect if user is holding a stick
 		
-        global_current_gesture = detectGesture(hold); // get gesture number
+		if (!hold)
+			global_current_gesture = detectGesture(); // get gesture number
 		
         usleep(MICRO_S_SLEEP);
     }
