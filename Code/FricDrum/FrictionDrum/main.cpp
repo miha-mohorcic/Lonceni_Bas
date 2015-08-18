@@ -21,7 +21,7 @@
 #define HIST_INP_HOLD_SAMPLE 20 // number of samples used for hold detection
 #define MICRO_S_SLEEP 25000     // micro seconds of sleep between samples
 
-#define ST_BUFFER_SIZE 44100 	// soundtouch buffer size
+#define ST_BUFFER_SIZE 354000 	// soundtouch buffer size
 
 uint16_t touched = 0; //global bitwise status of currently active inputs
 uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
@@ -114,8 +114,16 @@ void produce_initialize(Uint32* sound_len, Uint8** sound_buf, SDL_AudioSpec* aud
 		pthread_exit(NULL); //exit (main thread handles lack of sound!)
 	}
 
+
 	sound_len[0] = sound_len[1]; //define silence sound (fill with 0's)
 	sound_buf[0] = (Uint8 *)calloc(sound_len[1], sizeof(Uint8));
+
+	
+	/*int i;
+	for (i = 0; i < 4; i++) {
+		printf("%d ", sound_len[i]);
+	}*/ 
+	
 
 	//set spec file
 	(*audio_spec).callback = my_audio_callback;
@@ -148,7 +156,7 @@ void *produce_thread(void *threadid)
 
 
 	//samples have to have 2 channels and 44100Hz samplerate!
-	float soundtouch_buffer[ST_BUFFER_SIZE];
+	float soundtouch_buffer[ST_BUFFER_SIZE] = {0.0f};
 	Uint8 soundtouch_buffer2[ST_BUFFER_SIZE];
 	int soundtouch_len = ST_BUFFER_SIZE / 2;
 	SoundTouch stouch;
@@ -168,16 +176,19 @@ void *produce_thread(void *threadid)
 			
 			if(prev_gesture != current_gesture)
 			{
+				printf("Num of unprocessed samples: %d\n", stouch.numUnprocessedSamples());
 				float pitch = sqrt(pow((double)joystick_x, 2.0) + pow((double)joystick_y, 2.0));
 				pitch = 10.0*(pitch/512.0); //0.0-1.99 -1
 				
 				stouch.setPitchSemiTones(pitch);
+				
 				temp_min = ((ST_BUFFER_SIZE < sound_len[current_gesture]) ? ST_BUFFER_SIZE : sound_len[current_gesture]);
 				for(int i=0; i< temp_min;i++){
 					soundtouch_buffer[i] = (float) sound_buf[current_gesture][i];
 				}
 				
-				stouch.putSamples(soundtouch_buffer,(uint)sound_len[current_gesture]);
+				stouch.putSamples(soundtouch_buffer,(uint)sound_len[current_gesture] / 2);
+				
 				nSamples = stouch.receiveSamples(soundtouch_buffer,(uint)soundtouch_len);
 				
 				for(int i=0; i< nSamples;i++){
