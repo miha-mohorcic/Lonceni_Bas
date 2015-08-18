@@ -27,6 +27,10 @@ uint16_t touched = 0; //global bitwise status of currently active inputs
 uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
 uint16_t joystick_y = 0; //global position of joystick y direction -> between 1-1023
 
+uint16_t joystick_x0 = 0; //global position of joystick x direction -> between 1-1023
+uint16_t joystick_y0 = 0; //global position of joystick y direction -> between 1-1023
+
+
 int global_current_gesture; //global number of current gesture (silence, up, down, tap)
 Uint8 *audio_pos; //current position in audio buffer
 Uint32 audio_len; //length (in bytes) of the audio buffer
@@ -39,6 +43,9 @@ MPR121 sense_initialize(){
 	cout << " Initializing wiringPi and MCP3008 headers" << endl;
 	wiringPiSetup();
 	mcp3004Setup(100,0);
+	
+	joystick_x0 = analogRead(101); //read joystick x pitch
+	joystick_y0 = analogRead(102); //read joystick y pitch
 	
 	cout << " Initializing MPR121" << endl;
     MPR121 sensor = MPR121();
@@ -168,6 +175,7 @@ void *produce_thread(void *threadid)
 	int prev_gesture = 0;
 	int current_gesture = 0;
 	int temp_min = 0;
+	float pitch;
 	while(true) 
 	{
 		while(audio_len > 0)
@@ -176,10 +184,9 @@ void *produce_thread(void *threadid)
 			
 			if(prev_gesture != current_gesture)
 			{
-				printf("Num of unprocessed samples: %d\n", stouch.numUnprocessedSamples());
-				float pitch = sqrt(pow((double)joystick_x, 2.0) + pow((double)joystick_y, 2.0));
-				pitch = 10.0*(pitch/512.0); //0.0-1.99 -1
-				
+				pitch = sqrt(pow((double)(joystick_x-joystick_x0), 2.0) + pow((double)(joystick_y-joystick_y0), 2.0));
+				pitch = pitch/1040;
+								
 				stouch.setPitchSemiTones(pitch);
 				
 				temp_min = ((ST_BUFFER_SIZE < sound_len[current_gesture]) ? ST_BUFFER_SIZE : sound_len[current_gesture]);
@@ -192,7 +199,7 @@ void *produce_thread(void *threadid)
 				nSamples = stouch.receiveSamples(soundtouch_buffer,(uint)soundtouch_len);
 				
 				for(int i=0; i< nSamples;i++){
-					soundtouch_buffer2[i] = (Uint8) soundtouch_buffer2[i];
+					soundtouch_buffer2[i] = (Uint8) soundtouch_buffer[i];
 				}
 				
 				SDL_LockAudio();
