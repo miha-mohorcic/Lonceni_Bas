@@ -8,10 +8,8 @@
 #include <unistd.h>
 #include <math.h>
 #include <pthread.h>
-
 #include "wiringPi.h"
 #include "mcp3004.h"
-
 #include "include/MPR121.h"
 #include <soundtouch/SoundTouch.h>
 #include "SDL2/SDL.h"
@@ -20,16 +18,13 @@
 #define HIST_INP_SAMPLE 10      // number of samples used for history of touches
 #define HIST_INP_HOLD_SAMPLE 20 // number of samples used for hold detection
 #define MICRO_S_SLEEP 25000     // micro seconds of sleep between samples
-
 #define ST_BUFFER_SIZE 354000 	// soundtouch buffer size
 
 uint16_t touched = 0; //global bitwise status of currently active inputs
 uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
 uint16_t joystick_y = 0; //global position of joystick y direction -> between 1-1023
-
 uint16_t joystick_x0 = 0; //global position of joystick x direction -> between 1-1023
 uint16_t joystick_y0 = 0; //global position of joystick y direction -> between 1-1023
-
 
 int global_current_gesture; //global number of current gesture (silence, up, down, tap)
 Uint8 *audio_pos; //current position in audio buffer
@@ -193,146 +188,140 @@ int detectGesture()
 // update history to new value from inputs
 void update_hist(uint16_t *hist) 
 {
-int i = 1;
-for(i = 1; i < HIST_INP_HOLD_SAMPLE; i++)
-hist[i-1] = hist[i];
+	int i = 1;
+	for(i = 1; i < HIST_INP_HOLD_SAMPLE; i++)
+	hist[i-1] = hist[i];
 
-hist[HIST_INP_HOLD_SAMPLE -1] = touched;
+	hist[HIST_INP_HOLD_SAMPLE -1] = touched;
 }
 
 //detect when stick is held - if any pin is pressed >= HIST_INP_HOLD_SAMPLE
 bool detectHold() 
 {
-static uint16_t hist[HIST_INP_HOLD_SAMPLE] = {0};
-bool hold = true;
-uint16_t mask;
-update_hist(hist);
-int i = 0, j = 0;
+	static uint16_t hist[HIST_INP_HOLD_SAMPLE] = {0};
+	bool hold = true;
+	uint16_t mask;
+	update_hist(hist);
+	int i = 0, j = 0;
 
-for(j = 0; j < MPR121_NUM_INPUTS; j++)
-{
-hold = true;
-mask = 1 << j;
-for(i = 0; i < HIST_INP_HOLD_SAMPLE; i++)
-{
-if(0 == (hist[i] &&mask))
-{
-hold = false;
-break;
-}
-}
-if(hold)
-{
-break;
-}
-}
-
-return hold;
+	for(j = 0; j < MPR121_NUM_INPUTS; j++)
+	{
+		hold = true;
+		mask = 1 << j;
+		for(i = 0; i < HIST_INP_HOLD_SAMPLE; i++)
+		{
+			if(0 == (hist[i] &&mask))
+			{
+				hold = false;
+				break;
+			}
+		}
+		if(hold)
+		{
+			break;
+		}
+	}
+	return hold;
 }
 
 
 
 int main()
 {
-int re1 = 0;
-//run threads for touch detection and sound generation
-pthread_t sense;
+	int re1 = 0;
+	//run threads for touch detection and sound generation
+	pthread_t sense;
 
-if(pthread_create(&sense, NULL, sense_thread, (void *)re1))
-cout << "Error: Could not start sense_thread!\n";
-bool hold = false;
+	if(pthread_create(&sense, NULL, sense_thread, (void *)re1))
+		cout << "Error: Could not start sense_thread!\n";
+	bool hold = false;
 
-SDL_AudioSpec audio_spec; //spec file used to get audio info
-Uint32 sound_len[4]; // silence, up, down, tap in order of array
-Uint8 **sound_buf = (Uint8 **)calloc(4, sizeof(Uint8 *));
+	SDL_AudioSpec audio_spec; //spec file used to get audio info
+	Uint32 sound_len[4]; // silence, up, down, tap in order of array
+	Uint8 **sound_buf = (Uint8 **)calloc(4, sizeof(Uint8 *));
 
-produce_initialize(sound_len, sound_buf, &audio_spec);
+	produce_initialize(sound_len, sound_buf, &audio_spec);
 
-//start playing flat wave
-audio_pos = sound_buf[0];
-audio_len = sound_len[0];
+	//start playing flat wave
+	audio_pos = sound_buf[0];
+	audio_len = sound_len[0];
 
-//open the audio device
-if(SDL_OpenAudio(&audio_spec, NULL) <  0)
-{
-cout << "  FAILED OPENING AUDIO DEVICE!\n" << SDL_GetError() << endl ;
-pthread_kill(sense,9);
-pthread_exit(NULL);
-}
+	//open the audio device
+	if(SDL_OpenAudio(&audio_spec, NULL) <  0)
+	{
+		cout << "  FAILED OPENING AUDIO DEVICE!\n" << SDL_GetError() << endl ;
+		pthread_kill(sense,9);
+		pthread_exit(NULL);
+	}
 
+	//let the callback function play the audio chunk
+	SDL_PauseAudio(0);
 
-//let the callback function play the audio chunk
-SDL_PauseAudio(0);
+	//samples have to have 2 channels and 44100Hz samplerate!
+	float soundtouch_buffer[ST_BUFFER_SIZE] = {0.0f};
+	Uint8 soundtouch_buffer2[ST_BUFFER_SIZE];
+	int soundtouch_len = ST_BUFFER_SIZE / 2;
+	SoundTouch stouch;
+	stouch.setSampleRate((int)44100);
+	stouch.setChannels((int)2);
+	stouch.setSetting(SETTING_USE_QUICKSEEK, 1);
+	int nSamples = 0;
 
+	//adapt currently playing sample
+	int prev_gesture = 0;
+	int current_gesture = 0;
+	int temp_min = 0;
+	float pitch;
 
-//samples have to have 2 channels and 44100Hz samplerate!
-float soundtouch_buffer[ST_BUFFER_SIZE] = {0.0f};
-Uint8 soundtouch_buffer2[ST_BUFFER_SIZE];
-int soundtouch_len = ST_BUFFER_SIZE / 2;
-SoundTouch stouch;
-stouch.setSampleRate((int)44100);
-stouch.setChannels((int)2);
-int nSamples = 0;
+	while(pthread_kill(sense,0) == 0 )
+	{
+		hold = detectHold(); // detect if user is holding a stick
 
-//adapt currently playing sample
-int prev_gesture = 0;
-int current_gesture = 0;
-int temp_min = 0;
-float pitch;
+		if (!hold)
+		current_gesture = detectGesture(); // get gesture number
 
-while(pthread_kill(sense,0) == 0 )
-{
-hold = detectHold(); // detect if user is holding a stick
+		if(prev_gesture != current_gesture)
+		{
+			pitch = ((joystick_x-joystick_x0) + (joystick_y-joystick_y0) )/2;
+			pitch = pitch/512;
 
-if (!hold)
-current_gesture = detectGesture(); // get gesture number
+			stouch.setPitchSemiTones(pitch);
 
+			temp_min = ((ST_BUFFER_SIZE < sound_len[current_gesture]) ? ST_BUFFER_SIZE : sound_len[current_gesture]);
+			for(int i=0; i< temp_min;i++){
+				soundtouch_buffer[i] = (float) sound_buf[current_gesture][i];
+			}
 
-if(prev_gesture != current_gesture)
-{
-pitch = sqrt(pow((double)(joystick_x-joystick_x0), 2.0) + pow((double)(joystick_y-joystick_y0), 2.0));
-pitch = pitch/1040;
+			stouch.putSamples(soundtouch_buffer,(uint)sound_len[current_gesture] / 2);
 
-stouch.setPitchSemiTones(pitch);
+			nSamples = stouch.receiveSamples(soundtouch_buffer,(uint)soundtouch_len);
 
-temp_min = ((ST_BUFFER_SIZE < sound_len[current_gesture]) ? ST_BUFFER_SIZE : sound_len[current_gesture]);
-for(int i=0; i< temp_min;i++){
-soundtouch_buffer[i] = (float) sound_buf[current_gesture][i];
-}
+			for(int i=0; i< nSamples;i++){
+				soundtouch_buffer2[i] = (Uint8) soundtouch_buffer[i];
+			}
 
-stouch.putSamples(soundtouch_buffer,(uint)sound_len[current_gesture] / 2);
+			SDL_LockAudio();
+			audio_len = nSamples;
+			audio_pos = soundtouch_buffer2;
+			SDL_UnlockAudio();
+			prev_gesture = current_gesture;
+		}
 
-nSamples = stouch.receiveSamples(soundtouch_buffer,(uint)soundtouch_len);
+		usleep(MICRO_S_SLEEP);
+	}
 
-for(int i=0; i< nSamples;i++){
-soundtouch_buffer2[i] = (Uint8) soundtouch_buffer[i];
-}
+	SDL_CloseAudio();
 
-SDL_LockAudio();
-audio_len = nSamples;
-audio_pos = soundtouch_buffer2;
-SDL_UnlockAudio();
+	for (int i = 0; i < 4; i++) 
+		SDL_FreeWAV(sound_buf[i]);
 
-prev_gesture = current_gesture;
-}
-
-usleep(MICRO_S_SLEEP);
-}
-
-SDL_CloseAudio();
-
-for (int i = 0; i < 4; i++) 
-SDL_FreeWAV(sound_buf[i]);
-
-
-if(pthread_kill(sense,0) != 0 ){
-cout << "Sense thread died!\nCheck output for what happened!" << endl;
-
-} else
-{
-cout << "Threads are alive! Something went wrong. Check output or check for errors elsewhere!" << endl;
-cout << "Killing threads and exiting!" << endl;
-pthread_kill(sense,9);
-}
-pthread_exit(NULL);
+	if(pthread_kill(sense,0) != 0 ){
+		cout << "Sense thread died!\nCheck output for what happened!" << endl;
+	} else
+	{
+		cout << "Threads are alive! Something went wrong. Check output or check for errors elsewhere!" << endl;
+		cout << "Killing threads and exiting!" << endl;
+		pthread_kill(sense,9);
+	}
+	pthread_exit(NULL);
 }
