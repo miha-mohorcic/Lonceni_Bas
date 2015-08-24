@@ -89,7 +89,7 @@ int initialize_SDL(){
 }
 
 int initialize_touch(){
-	
+	system("gpio load i2c");
 	MPR121_ADDR = wiringPiI2CSetup(0x5a); // default address
 	if(MPR121_ADDR == -1){
 		cout << "MPR121 NOT OK\n" << flush;
