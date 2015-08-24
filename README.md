@@ -1,8 +1,11 @@
-# Lonceni_Bas
+# Lonceni_Bas (Friction Drum)
 
 # Project of UL LGM
 
- RaspberryPi + MPR121 sensor for detection and response to touches. 
- I2C must be enabled on rPi and SDL2 installed
+RaspberryPi + capacitive sensor + analog joystick
+
+Uses SDL2, wiringPi, pthreads, SoundTouch libraries
  
-Includes SoundTouch, bcm2835, MPR121 and I2Cdev! Check their licence conditions!
+SPI & I2C must be enabled on rPi, SDL2 installed
+ 
+Project is including SoundTouch library ( /Code/soundtouch )
