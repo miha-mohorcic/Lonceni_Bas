@@ -1,334 +1,185 @@
-/////////////////////////////////////////////////////
-/// Friction drum
-/// UL FRI - LGM project
-/////////////////////////////////////////////////////
+////////////////////////////
+/// Friction Drum V0.2   ///
+/// UL FRI - LGM Project ///
+////////////////////////////
 
+//includes
+// standard IO
+#include <stdio.h>
+#include <stdlib.h>
 #include <iostream>
-#include <string>
-#include <unistd.h>
-#include <math.h>
+// threading
 #include <pthread.h>
+// joystick
 #include "wiringPi.h"
 #include "mcp3004.h"
+// touch sensor
 #include "include/MPR121.h"
+// WAV reading
+#include <sndfile.h>
+// WAV pitching
 #include <soundtouch/SoundTouch.h>
+// WAV playing 
 #include "SDL2/SDL.h"
 
-#define MPR121_NUM_INPUTS 8 	// number of inputs on MPR121 used
-#define HIST_INP_SAMPLE 10      // number of samples used for history of touches
-#define HIST_INP_HOLD_SAMPLE 20 // number of samples used for hold detection
-#define MICRO_S_SLEEP 25000     // micro seconds of sleep between samples
-#define ST_BUFFER_SIZE 354000 	// soundtouch buffer size
+//defines
+#define DEBUG_INPUT true
+#define USE_JOYSTICK true
+#define USE_MPR121 true
+#define TOUCH_INPUTS 8
+#define MICRO_S_SLEEP_UPDATE 2000
+#define MICRO_S_SLEEP_SOUND 1000000
 
+//global variables
+MPR121 sensor;
 uint16_t touched = 0; //global bitwise status of currently active inputs
 uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
-uint16_t joystick_y = 0; //global position of joystick y direction -> between 1-1023
-uint16_t joystick_x0 = 0; //global position of joystick x direction -> between 1-1023
-uint16_t joystick_y0 = 0; //global position of joystick y direction -> between 1-1023
+uint16_t joystick_y = 0;
 
-int global_current_gesture; //global number of current gesture (silence, up, down, tap)
-Uint8 *audio_pos; //current position in audio buffer
-Uint32 audio_len; //length (in bytes) of the audio buffer
-
-using namespace soundtouch;
 using namespace std;
 
-//initialize MPR121
-MPR121 sense_initialize(){
-	cout << " Initializing wiringPi and MCP3008 headers" << endl;
-	wiringPiSetup();
-	mcp3004Setup(100,0);
+void *update_state(void *threadid)
+{
+	while(true)
+	{
+		//analogRead(100); //read joystick pressed status
+		if(USE_JOYSTICK){
+			if(DEBUG_INPUT)
+				cout << "reading joystick: ";
+			joystick_x = analogRead(101); //read joystick x pitch
+			joystick_y = analogRead(102); //read joystick y pitch
+			if(DEBUG_INPUT)
+				cout << "done\n";
+		}
+		if(USE_MPR121){
+			if(DEBUG_INPUT)
+				cout << "reading MPR: ";
+			touched = sensor.getTouchStatus(); //read MPR
+			if(DEBUG_INPUT)
+				cout << "done\n";
+		}
+		
+		//cout << "X: " <<joystick_x<< " Y: " << joystick_y << " t: " << touched << endl;
+		usleep(MICRO_S_SLEEP_UPDATE);
+		if(DEBUG_INPUT){
+			int mask = 1;
+			for(int i=0;i<TOUCH_INPUTS;i++){
+				cout << ((mask & touched) >1);
+				mask <<=1;
+			}
+			cout << "\tjoystick x: " << joystick_x << "  ";
+			cout << "\tjoystick y: " << joystick_y << "  ";
+			cout << "\n";
+		}
+	}
+	cout << "Sense thread is dead!" << endl;
+	pthread_exit(NULL);
+}
 
-	joystick_x0 = analogRead(101); //read joystick x pitch
-	joystick_y0 = analogRead(102); //read joystick y pitch
+int initialize_SDL(){
+	if(SDL_Init(SDL_INIT_AUDIO) < 0){
+		cout << "SDL NOT INITIALIZED!\n" << SDL_GetError()  << endl;
+		return 1;
+	}
+	cout << "SDL OK\n";
+	return 0;
+}
 
-	cout << " Initializing MPR121" << endl;
-	MPR121 sensor = MPR121();
+int initialize_touch(){
+	sensor = MPR121();
 	sensor.initialize();
 
 	if(sensor.testConnection())
 	{
-		cout << " MPR121 OK,   \n Starting sense thread!" << endl;
+		cout << "MPR121 OK" << endl;
+		return 0;
 	}
-	else
-	{
-		cout << " MPR121 not OK,\nStopping sense thread!" << endl;
-		cout << " There was and issue reading correct value from "
-		"one of the registers (should be 0x04)" << endl << endl;
-		pthread_exit(NULL);
-	}
-	return sensor;
-}
-
-//MPR121 thread updating status of touched pins
-void *sense_thread(void *threadid)
-{
-	MPR121 sensor = sense_initialize();
-	while(true)
-	{
-		//analogRead(100); //read joystick pressed status
-		joystick_x = analogRead(101); //read joystick x pitch
-		joystick_y = analogRead(102); //read joystick y pitch
-		touched = sensor.getTouchStatus(); //read MPR
-
-		//cout << "X: " <<joystick_x<< " Y: " << joystick_y << " t: " << touched << endl;
-		usleep(MICRO_S_SLEEP);
-	}
-	cout << " Sense thread dying!" << endl;
-	pthread_exit(NULL);
-}
-
-//SDL audio callback - plays wave found at audio_pos 
-void my_audio_callback(void *userdata, Uint8 *stream, int len){
-	// only play if there is some data left
-	if(audio_len == 0)
-		return;
-
-	// mix as much data as possible	
-	len = (len > (int) audio_len ? (int) audio_len : len);	
-
-	SDL_memcpy(stream, audio_pos, len); 	//substitute stream
-	//SDL_MixAudio(stream, audio_pos, len, SDL_MIX_MAXVOLUME); //mix with existing stream
-
-	audio_pos += len;
-	audio_len -= len;
-}
-
-//initialize SDL and load wav files
-void produce_initialize(Uint32* sound_len, Uint8** sound_buf, SDL_AudioSpec* audio_spec){
-	cout << "  Reading and initializing media files." << endl;
-	char const *file_up = "C.wav"; //what to play on gesture up
-	char const *file_down = "D.wav"; //what to play on gesture down
-	char const *file_tap = "E.wav"; //what to play on top tap 
-
-	//initialize SDL_AUDIO
-	if(SDL_Init(SDL_INIT_AUDIO) < 0){
-		cout << "  SDL NOT INITIALIZED!\n" << SDL_GetError()  << endl;
-		pthread_exit(NULL); 
-	}
-
-	//load wav files
-	if(SDL_LoadWAV(file_up,audio_spec,&sound_buf[1],&sound_len[1]) == NULL ||
-	SDL_LoadWAV(file_down,audio_spec,&sound_buf[2],&sound_len[2]) == NULL ||
-	SDL_LoadWAV(file_tap,audio_spec,&sound_buf[3],&sound_len[3]) == NULL)
-	{
-		cout << "  ERROR OPENING FILES!\n" << SDL_GetError() << endl;
-		pthread_exit(NULL); //exit (main thread handles lack of sound!)
-	}
-
-	sound_len[0] = sound_len[1]; //define silence sound (fill with 0's)
-	sound_buf[0] = (Uint8 *)calloc(sound_len[1], sizeof(Uint8));
-
-	//set spec file
-	(*audio_spec).callback = my_audio_callback;
-	(*audio_spec).userdata = NULL;
-}
-
-//return number of detected gesture (0: silence, 1: up, 2: down, 3: tap)
-int detectGesture()
-{
-	static double hist_avg_sample[HIST_INP_SAMPLE]; //remember history
-	double avg = 0.0;
-
-	//calculate avg vector of previous samples
-	for(int i = 1; i < HIST_INP_SAMPLE; i++)
-	{
-		avg += hist_avg_sample[i-1] - hist_avg_sample[i];
-		hist_avg_sample[i-1] = hist_avg_sample[i];
-	}
-
-	//add value with new sample
-	double new_avg = 0.00;
-	uint16_t mask = 1;
-	int pins_touched = 0;
-	int i = 0;
-
-	for(i = 0; i < MPR121_NUM_INPUTS; i++)
-	{
-		if(touched & mask)
-		{
-			pins_touched++;
-			new_avg += (double)i;
-		}
-		mask <<= 1;
-	}
-
-	new_avg = (double)new_avg / pins_touched;
-	avg += hist_avg_sample[HIST_INP_SAMPLE -1] - new_avg;
-	hist_avg_sample[HIST_INP_SAMPLE-1] = new_avg;
-
-	//detect tap
-	bool tap = false;
-	mask = 1;
-	for (i = 0; i < MPR121_NUM_INPUTS; i++)
-	{
-		if (i == 0 && touched & mask) {
-			tap = true;
-		} else if (i != 0 && touched & mask) {
-			tap = false;
-		}
-		mask <<= 1;
-	}
-
-	if(avg < 0.0) {
-	//cout << "1" << endl;
+	cout << "MPR121 not OK\n" << endl;
 	return 1;
-	}
-	else if(avg > 0.0) {
-	//cout << "2" << endl;
-		return 2;
-	}
-	else if (tap) {
-	//cout << "Tap!" << endl;
-		return 3;
-	}
+}
+
+int initialize_joystick(){
+	wiringPiSetup();
+	mcp3004Setup(100,0);
+	cout << "Joystick OK!\n";
 	return 0;
 }
 
-// update history to new value from inputs
-void update_hist(uint16_t *hist) 
-{
-	int i = 1;
-	for(i = 1; i < HIST_INP_HOLD_SAMPLE; i++)
-	hist[i-1] = hist[i];
-
-	hist[HIST_INP_HOLD_SAMPLE -1] = touched;
+int read_files(Uint32* sound_len, float ** sound_buf){
+	SNDFILE *sf;
+    SF_INFO info;
+    int num_items;
+    int f;
+    int sr;
+    int c;
+    char const * file_names[3] = {"C.wav","D.wav","E.wav"};
+    for(int i=0;i<3;i++){
+		/* Open the WAV file. */
+		info.format = 0;
+		sf = sf_open(file_names[i],SFM_READ,&info);
+		if (sf == NULL){
+			printf("Failed to open the file %d.\n",i);
+			return 1;
+		}
+		f = info.frames;
+		sr = info.samplerate;
+		c = info.channels;
+		num_items = f*c;
+		/* Allocate space for the data to be read, then read it. */
+		sound_buf[i+1] = (float *) malloc(num_items*sizeof(float));
+		sf_read_float(sf,sound_buf[i+1],num_items);
+		sf_close(sf);
+		sound_len[i+1]=(Uint32)num_items;
+	}
+	//make room for 1s silence
+	sound_len[0]= sr;
+	sound_buf[0]= (float *)calloc(sr, sizeof(float));
+	cout << "Loaded WAV files!\n";
+	return 0;
 }
 
-//detect when stick is held - if any pin is pressed >= HIST_INP_HOLD_SAMPLE
-bool detectHold() 
-{
-	static uint16_t hist[HIST_INP_HOLD_SAMPLE] = {0};
-	bool hold = true;
-	uint16_t mask;
-	update_hist(hist);
-	int i = 0, j = 0;
-
-	for(j = 0; j < MPR121_NUM_INPUTS; j++)
-	{
-		hold = true;
-		mask = 1 << j;
-		for(i = 0; i < HIST_INP_HOLD_SAMPLE; i++)
-		{
-			if(0 == (hist[i] &&mask))
-			{
-				hold = false;
-				break;
-			}
-		}
-		if(hold)
-		{
-			break;
+int main(int argc, char** argv){
+	//Initialize everything
+	Uint32 sound_len[4] = {0};
+	float** sound_buf = (float **)calloc(4,sizeof(float *));
+	
+	if(read_files(sound_len, sound_buf) != 0){
+		cout << "Problem reading files!\n";
+		return 1; 
+	}
+	
+	if(USE_JOYSTICK){
+		if(initialize_joystick() != 0){
+			cout << "Problem initializing joystick\n";
+			return 1;
 		}
 	}
-	return hold;
-}
-
-
-
-int main()
-{
+	
+	if(USE_MPR121){
+		if(initialize_touch() != 0){
+			cout << "Problem initializing touch sensor\n";
+			return 1;
+		}	
+	}
+	
+	if(initialize_SDL() != 0){
+		cout << "Problem initializing SDL\n";
+		return 1;
+	}
+	
+	//run thread for touch detection
 	int re1 = 0;
-	//run threads for touch detection and sound generation
 	pthread_t sense;
 
-	if(pthread_create(&sense, NULL, sense_thread, (void *)re1))
+	if(pthread_create(&sense, NULL, update_state, (void *)re1)){
 		cout << "Error: Could not start sense_thread!\n";
-	bool hold = false;
-
-	SDL_AudioSpec audio_spec; //spec file used to get audio info
-	Uint32 sound_len[4]; // silence, up, down, tap in order of array
-	Uint8 **sound_buf = (Uint8 **)calloc(4, sizeof(Uint8 *));
-
-	produce_initialize(sound_len, sound_buf, &audio_spec);
-
-	//start playing flat wave
-	audio_pos = sound_buf[0];
-	audio_len = sound_len[0];
-
-	//open the audio device
-	if(SDL_OpenAudio(&audio_spec, NULL) <  0)
-	{
-		cout << "  FAILED OPENING AUDIO DEVICE!\n" << SDL_GetError() << endl ;
-		pthread_kill(sense,9);
-		pthread_exit(NULL);
+		return 1;
 	}
-
-	//let the callback function play the audio chunk
-	SDL_PauseAudio(0);
-
-	//samples have to have 2 channels and 44100Hz samplerate!
-	float soundtouch_buffer[ST_BUFFER_SIZE] = {0.0f};
-	Uint8 soundtouch_buffer2[ST_BUFFER_SIZE];
-	int soundtouch_len = ST_BUFFER_SIZE / 2;
-	SoundTouch stouch;
-	stouch.setSampleRate((int)44100);
-	stouch.setChannels((int)2);
-	stouch.setSetting(SETTING_USE_QUICKSEEK, 1);
-	int nSamples = 0;
-
-	//adapt currently playing sample
-	int prev_gesture = 0;
-	int current_gesture = 0;
-	int temp_min = 0;
-	float pitch;
-
+	
 	while(pthread_kill(sense,0) == 0 )
 	{
-		hold = detectHold(); // detect if user is holding a stick
-
-		if (!hold)
-			current_gesture = detectGesture(); // get gesture number
-		
-		int mmm=1;
-		for (int mshift=0;mshift<MPR121_NUM_INPUTS;mshift++){
-			cout << ((mmm & current_gesture) > 0);
-			mmm <<=1;
-		}
-		cout << "\n";
-
-		if(prev_gesture != current_gesture)
-		{
-			pitch = ((joystick_x-joystick_x0) + (joystick_y-joystick_y0) )/2;
-			pitch = pitch/512;
-
-			stouch.setPitchSemiTones(pitch);
-
-			temp_min = ((ST_BUFFER_SIZE < sound_len[current_gesture]) ? ST_BUFFER_SIZE : sound_len[current_gesture]);
-			for(int i=0; i< temp_min;i++){
-				soundtouch_buffer[i] = (float) sound_buf[current_gesture][i];
-			}
-
-			stouch.putSamples(soundtouch_buffer,(uint)sound_len[current_gesture] / 2);
-
-			nSamples = stouch.receiveSamples(soundtouch_buffer,(uint)soundtouch_len);
-
-			for(int i=0; i< nSamples;i++){
-				soundtouch_buffer2[i] = (Uint8) soundtouch_buffer[i];
-			}
-
-			SDL_LockAudio();
-			audio_len = nSamples;
-			audio_pos = soundtouch_buffer2;
-			SDL_UnlockAudio();
-			prev_gesture = current_gesture;
-		}
-
-		usleep(MICRO_S_SLEEP);
+		cout << "." << flush;
+		usleep(MICRO_S_SLEEP_SOUND);
 	}
-
-	SDL_CloseAudio();
-
-	for (int i = 0; i < 4; i++) 
-		SDL_FreeWAV(sound_buf[i]);
-
-	if(pthread_kill(sense,0) != 0 ){
-		cout << "Sense thread died!\nCheck output for what happened!" << endl;
-	} else
-	{
-		cout << "Threads are alive! Something went wrong. Check output or check for errors elsewhere!" << endl;
-		cout << "Killing threads and exiting!" << endl;
-		pthread_kill(sense,9);
-	}
-	pthread_exit(NULL);
+	return 0;
 }

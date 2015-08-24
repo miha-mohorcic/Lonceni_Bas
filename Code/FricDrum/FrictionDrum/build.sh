@@ -11,5 +11,5 @@ echo "build main.cpp"
 g++ -c -o output/main.o main.cpp -std=c++0x  -O3 -Wall
 
 echo "link"
-g++ -o output/program output/bcm2835.o output/mpr121.o output/i2cdev.o output/main.o -lm -lSoundTouch -lpthread -lSDL2 -lwiringPi -O3 -Wall
+g++ -o output/program output/bcm2835.o output/mpr121.o output/i2cdev.o output/main.o -lm -lSoundTouch -lpthread -lSDL2 -lwiringPi -lsndfile -O3 -Wall
 
