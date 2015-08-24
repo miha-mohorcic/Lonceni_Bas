@@ -14,7 +14,7 @@
 #include <soundtouch/SoundTouch.h>
 #include "SDL2/SDL.h"
 
-#define MPR121_NUM_INPUTS 12    // number of inputs on MPR121 used
+#define MPR121_NUM_INPUTS 8 	// number of inputs on MPR121 used
 #define HIST_INP_SAMPLE 10      // number of samples used for history of touches
 #define HIST_INP_HOLD_SAMPLE 20 // number of samples used for hold detection
 #define MICRO_S_SLEEP 25000     // micro seconds of sleep between samples
@@ -278,7 +278,14 @@ int main()
 		hold = detectHold(); // detect if user is holding a stick
 
 		if (!hold)
-		current_gesture = detectGesture(); // get gesture number
+			current_gesture = detectGesture(); // get gesture number
+		
+		int mmm=1;
+		for (int mshift=0;mshift<MPR121_NUM_INPUTS;mshift++){
+			cout << ((mmm & current_gesture) > 0);
+			mmm <<=1;
+		}
+		cout << "\n";
 
 		if(prev_gesture != current_gesture)
 		{
