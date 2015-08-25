@@ -351,8 +351,8 @@ int main(int argc, char** argv){
 		//if(!hold)
 		gesture = detect_gesture();
 		if(DEBUG_SOUND)	{
-			cout << hold << " " ;
-			cout << gesture << "\n" << flush;
+			cout << "hold: " << hold << " " ;
+			cout << "gesture: " << gesture << "\n" << flush;
 		}
 		usleep(MICRO_S_SLEEP_SOUND);
 	}
