@@ -24,12 +24,15 @@
 #include "SDL2/SDL.h"
 
 //defines
-#define DEBUG_INPUT true
+#define DEBUG_SOUND true
+#define DEBUG_INPUT false
 #define USE_JOYSTICK true
 #define USE_MPR121 true
 #define TOUCH_INPUTS 8
-#define MICRO_S_SLEEP_UPDATE 2000 //sleep for updating MPR
-#define MICRO_S_SLEEP_SOUND 1000000 //sleep for sound production
+#define MICRO_S_SLEEP_UPDATE 25000 //sleep for updating MPR
+#define MICRO_S_SLEEP_SOUND 25000 //sleep for sound production
+#define HIST_INP_HOLD_SAMPLE 20
+#define HIST_INP_SAMPLE 10
 int MPR121_ADDR = 0; //file descriptor for MPR121
 
 //global variables
@@ -204,11 +207,98 @@ int read_files(Uint32* sound_len, float ** sound_buf){
 	return 0;
 }
 
+void update_hist(uint16_t *hist) 
+{
+	int i = 1;
+	for(i = 1; i < HIST_INP_HOLD_SAMPLE; i++)
+	hist[i-1] = hist[i];
+	hist[HIST_INP_HOLD_SAMPLE -1] = touched;
+}
+
 bool detect_hold(){
-	
+	static uint16_t hist[HIST_INP_HOLD_SAMPLE] = {0};
+	bool hold = true;
+	uint16_t mask;
+	update_hist(hist);
+	int i = 0, j = 0;
+
+	for(j = 0; j < TOUCH_INPUTS; j++)
+	{
+		hold = true;
+		mask = 1 << j;
+		for(i = 0; i < HIST_INP_HOLD_SAMPLE; i++)
+		{
+			if(0 == (hist[i] &&mask))
+			{
+				hold = false;
+				break;
+			}
+		}
+		if(hold)
+		{
+			break;
+		}
+	}
+	return hold;
 }
 
 int detect_gesture(){
+	static double hist_avg_sample[HIST_INP_SAMPLE]; //remember history
+	double avg = 0.0;
+
+	//calculate avg vector of previous samples
+	for(int i = 1; i < HIST_INP_SAMPLE; i++)
+	{
+		avg += hist_avg_sample[i-1] - hist_avg_sample[i];
+		hist_avg_sample[i-1] = hist_avg_sample[i];
+	}
+
+	//add value with new sample
+	double new_avg = 0.00;
+	uint16_t mask = 1;
+	int pins_touched = 0;
+	int i = 0;
+
+	for(i = 0; i < TOUCH_INPUTS; i++)
+	{
+		if(touched & mask)
+		{
+			pins_touched++;
+			new_avg += (double)i;
+		}
+		mask <<= 1;
+	}
+
+	new_avg = (double)new_avg / pins_touched;
+	avg += hist_avg_sample[HIST_INP_SAMPLE -1] - new_avg;
+	hist_avg_sample[HIST_INP_SAMPLE-1] = new_avg;
+
+	//detect tap
+	bool tap = false;
+	mask = 1;
+	for (i = 0; i < TOUCH_INPUTS; i++)
+	{
+		if (i == 0 && touched & mask) {
+			tap = true;
+		} else if (i != 0 && touched & mask) {
+			tap = false;
+		}
+		mask <<= 1;
+	}
+
+	if(avg < 0.0) {
+	//cout << "1" << endl;
+	return 1;
+	}
+	else if(avg > 0.0) {
+	//cout << "2" << endl;
+		return 2;
+	}
+	else if (tap) {
+	//cout << "Tap!" << endl;
+		return 3;
+	}
+	return 0;
 }
 
 int main(int argc, char** argv){
@@ -251,10 +341,19 @@ int main(int argc, char** argv){
 		return 1;
 	}
 	
+	bool hold;
+	int gesture;
 	//while sense thread is going -> we produce sounds
 	while(pthread_kill(sense,0) == 0 ) 
 	{
-		cout << "." << flush;
+		gesture = 0;
+		hold = detect_hold();
+		//if(!hold)
+		gesture = detect_gesture();
+		if(DEBUG_SOUND)	{
+			cout << hold << " " ;
+			cout << gesture << "\n" << flush;
+		}
 		usleep(MICRO_S_SLEEP_SOUND);
 	}
 	return 0;
