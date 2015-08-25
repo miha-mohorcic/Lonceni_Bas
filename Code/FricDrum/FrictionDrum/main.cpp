@@ -16,8 +16,6 @@
 // touch sensor
 #include "mpr121.h" // only register definitions
 #include "wiringPiI2C.h" 
-// WAV reading
-#include <sndfile.h>
 // WAV pitching
 #include <soundtouch/SoundTouch.h>
 // WAV playing 
@@ -29,11 +27,11 @@
 #define USE_JOYSTICK true
 #define USE_MPR121 true
 #define TOUCH_INPUTS 8
-#define MICRO_S_SLEEP_UPDATE 25000 //sleep for updating MPR
-#define MICRO_S_SLEEP_SOUND 25000 //sleep for sound production
-#define HIST_INP_HOLD_SAMPLE 20
+#define MICRO_S_SLEEP_UPDATE 25000 // delay between MPR updates
+#define MICRO_S_SLEEP_SOUND 25000  // delay for sound production
+#define HIST_INP_HOLD_SAMPLE 30
 #define HIST_INP_SAMPLE 10
-int MPR121_ADDR = 0; //file descriptor for MPR121
+
 
 //global variables
 uint16_t touched = 0; //global bitwise status of currently active inputs
@@ -42,6 +40,7 @@ uint16_t joystick_y = 0;
 
 using namespace std;
 
+int MPR121_ADDR = 0; //file descriptor for MPR121
 uint write_MPR(int reg, int data){
 	return wiringPiI2CWriteReg8(MPR121_ADDR, (reg & 0xff), (data & 0xff));
 }
@@ -65,8 +64,6 @@ void *update_state(void *threadid){
 			touched = ((msb << 8) | lsb) ;
 		}
 		
-		//cout << "X: " <<joystick_x<< " Y: " << joystick_y << " t: " << touched << endl;
-		usleep(MICRO_S_SLEEP_UPDATE);
 		if(DEBUG_INPUT){
 			int mask = 1;
 			for(int i=0;i<TOUCH_INPUTS;i++){
@@ -77,6 +74,8 @@ void *update_state(void *threadid){
 			cout << "\tjoystick y: " << joystick_y << "  ";
 			cout << "\n"<< flush;
 		}
+		
+		usleep(MICRO_S_SLEEP_UPDATE);
 	}
 	cout << "Sense thread is dead!" << endl;
 	pthread_exit(NULL);
@@ -173,45 +172,30 @@ int initialize_joystick(){
 	return 0;
 }
 
-int read_files(Uint32* sound_len, float ** sound_buf){
-	SNDFILE *sf;
-    SF_INFO info;
-    int num_items;
-    int f;
-    int sr;
-    int c;
-    char const * file_names[3] = {"C.wav","D.wav","E.wav"};
-    for(int i=0;i<3;i++){
-		/* Open the WAV file. */
-		info.format = 0;
-		sf = sf_open(file_names[i],SFM_READ,&info);
-		if (sf == NULL){
-			printf("Failed to open the file %d.\n",i);
-			return 1;
-		}
-		f = info.frames;
-		sr = info.samplerate;
-		c = info.channels;
-		num_items = f*c;
-		/* Allocate space for the data to be read, then read it. */
-		sound_buf[i+1] = (float *) malloc(num_items*sizeof(float));
-		sf_read_float(sf,sound_buf[i+1],num_items);
-		sf_close(sf);
-		sound_len[i+1]=(Uint32)num_items;
-		printf(" Opened File %d.\n",i);
+int read_files(Uint32* sound_len, Uint8 ** sound_buf, SDL_AudioSpec* audio_spec){
+	cout << "  Reading and initializing media files." << endl;
+	char const *file_tap = "E.wav"; 
+	char const *file_up = "C.wav";
+	char const *file_down = "D.wav"; 
+	
+	if(SDL_LoadWAV(file_up,audio_spec,&sound_buf[1],&sound_len[1]) == NULL ||
+	SDL_LoadWAV(file_down,audio_spec,&sound_buf[2],&sound_len[2]) == NULL ||
+	SDL_LoadWAV(file_tap,audio_spec,&sound_buf[3],&sound_len[3]) == NULL)
+	{
+		cout << "  ERROR OPENING FILES!\n" << SDL_GetError() << endl;
+		return 1;
 	}
-	//make room for 1s silence
-	sound_len[0]= sr;
-	sound_buf[0]= (float *)calloc(sr, sizeof(float));
+
+	sound_len[0] = 88200; //define silence sound (fill with 0's)
+	sound_buf[0] = (Uint8 *)calloc(88200, sizeof(Uint8));
+
 	cout << "\nLoading all files OK\n";
 	return 0;
 }
 
-void update_hist(uint16_t *hist) 
-{
-	int i = 1;
-	for(i = 1; i < HIST_INP_HOLD_SAMPLE; i++)
-	hist[i-1] = hist[i];
+void update_hist(uint16_t *hist){
+	for(int i = 1; i < HIST_INP_HOLD_SAMPLE; i++)
+		hist[i-1] = hist[i];
 	hist[HIST_INP_HOLD_SAMPLE -1] = touched;
 }
 
@@ -220,22 +204,17 @@ bool detect_hold(){
 	bool hold = true;
 	uint16_t mask;
 	update_hist(hist);
-	int i = 0, j = 0;
-
-	for(j = 0; j < TOUCH_INPUTS; j++)
-	{
+	
+	for(int j = 0; j < TOUCH_INPUTS; j++){
 		hold = true;
 		mask = 1 << j;
-		for(i = 0; i < HIST_INP_HOLD_SAMPLE; i++)
-		{
-			if(0 == (hist[i] &&mask))
-			{
+		for(int i = 0; i < HIST_INP_HOLD_SAMPLE; i++){
+			if(0 == (hist[i] &&mask)){
 				hold = false;
 				break;
 			}
 		}
-		if(hold)
-		{
+		if(hold){
 			break;
 		}
 	}
@@ -278,10 +257,12 @@ int detect_gesture(){
 	mask = 1;
 	for (i = 0; i < TOUCH_INPUTS; i++)
 	{
-		if (i == 0 && touched & mask) {
+		if (i == 0 && (touched & mask)) {
 			tap = true;
-		} else if (i != 0 && touched & mask) {
+			break;
+		} else if (i != 0 && (touched & mask)) {
 			tap = false;
+			break;
 		}
 		mask <<= 1;
 	}
@@ -304,9 +285,10 @@ int detect_gesture(){
 int main(int argc, char** argv){
 	//Initialize everything
 	Uint32 sound_len[4] = {0};
-	float** sound_buf = (float **)calloc(4,sizeof(float *));
+	Uint8** sound_buf = (Uint8 **)calloc(4,sizeof(Uint8 *));
+	SDL_AudioSpec audio_spec;
 	
-	if(read_files(sound_len, sound_buf) != 0){
+	if(read_files(sound_len, sound_buf, &audio_spec) != 0){
 		cout << "Problem reading files!\n";
 		return 1; 
 	}
@@ -349,11 +331,13 @@ int main(int argc, char** argv){
 		gesture = 0;
 		hold = detect_hold();
 		//if(!hold)
-		gesture = detect_gesture();
+			gesture = detect_gesture();
+		
 		if(DEBUG_SOUND)	{
 			cout << "hold: " << hold << " " ;
 			cout << "gesture: " << gesture << "\n" << flush;
 		}
+		
 		usleep(MICRO_S_SLEEP_SOUND);
 	}
 	return 0;
