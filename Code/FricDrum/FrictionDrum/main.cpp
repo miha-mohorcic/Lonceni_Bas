@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <math.h>
 // threading
 #include <pthread.h>
 // joystick
@@ -22,12 +23,14 @@
 //defines
 #define DEBUG_SOUND false
 #define DEBUG_INPUT false
+#define DEBUG_SDL 	false
 #define USE_JOYSTICK true
 #define USE_MPR121 true
 #define TOUCH_INPUTS 8
-#define MICRO_S_SLEEP_UPDATE 2500 // delay between MPR updates
-#define MICRO_S_SLEEP_SOUND 2500  // delay for sound production
-#define HIST_INP_HOLD_SAMPLE 15
+//delays should be big enough
+#define MICRO_S_SLEEP_UPDATE 2000 // delay between MPR updates
+#define MICRO_S_SLEEP_SOUND 2000  // delay for sound production
+#define HIST_INP_HOLD_SAMPLE 100
 #define HIST_INP_SAMPLE 10
 
 
@@ -35,6 +38,8 @@
 uint16_t touched = 0; //global bitwise status of currently active inputs
 uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
 uint16_t joystick_y = 0;
+uint16_t sjoy_x = 0; //start joystick position
+uint16_t sjoy_y = 0;
 
 using namespace std;
 
@@ -89,14 +94,14 @@ int initialize_SDL(){
 }
 
 int initialize_touch(){
+	cout << "starting MPR setup\n";
 	system("gpio load i2c");
 	MPR121_ADDR = wiringPiI2CSetup(0x5a); // default address
 	if(MPR121_ADDR == -1){
 		cout << "MPR121 NOT OK\n" << flush;
 		return 1;
 	} 
-	cout << "starting MPR setup\n";
-	// start MPR121 setup
+	// start MPR121 registers setup
 	write_MPR(ELE_CFG, 0x00); 
 
 	// filtering when data is > baseline.
@@ -159,13 +164,15 @@ int initialize_touch(){
 	//write_MPR(ELE_CFG, 0x0C);  // Enables all 12 Electrodes
 	write_MPR(ELE_CFG, 0x08);  // Enables 8 Electrodes
 	//write_MPR(ELE_CFG, 0xC8);	//baseline + 8 electrodes
-	cout << "MPR121 OK\n" << endl;
+	cout << "MPR121 OK\n";
 	return 0;
 }
 
 int initialize_joystick(){
 	wiringPiSetup();
 	mcp3004Setup(100,0);
+	sjoy_x = analogRead(101);
+	sjoy_y = analogRead(102);
 	cout << "Joystick OK!\n";
 	return 0;
 }
@@ -199,23 +206,27 @@ void update_hist(uint16_t *hist){
 
 bool detect_hold(){
 	static uint16_t hist[HIST_INP_HOLD_SAMPLE] = {0};
-	bool hold = true;
-	uint16_t mask;
-	update_hist(hist);
-	
-	for(int j = 0; j < TOUCH_INPUTS; j++){
-		hold = true;
-		mask = 1 << j;
-		for(int i = 0; i < HIST_INP_HOLD_SAMPLE; i++){
-			if(0 == (hist[i] &&mask)){
-				hold = false;
+	static bool comp = true;
+	static bool hold = true;
+	if(comp){
+		uint16_t mask;
+		update_hist(hist);
+		
+		for(int j = 0; j < TOUCH_INPUTS; j++){
+			hold = true;
+			mask = 1 << j;
+			for(int i = 0; i < HIST_INP_HOLD_SAMPLE; i++){
+				if(0 == (hist[i] &&mask)){
+					hold = false;
+					break;
+				}
+			}
+			if(hold){
 				break;
 			}
 		}
-		if(hold){
-			break;
-		}
 	}
+	comp = !comp;
 	return hold;
 }
 
@@ -280,6 +291,22 @@ int detect_gesture(){
 	return 0;
 }
 
+Uint8 *audio_pos;
+Uint32 audio_len;
+
+void SDL_audio_callback(void* udata, Uint8* stream, int len){
+	static int sample_len = 44100; // 10th of a second is max sample length
+	if(audio_len==0)
+		return;
+	
+	len=(len > (int)audio_len ? audio_len : len);
+	len=(len > sample_len ? sample_len : len);
+	SDL_memcpy(stream, audio_pos,len);
+	if(DEBUG_SDL){
+		cout << len << " " << sample_len << " " << audio_len << "\n" << flush;
+	}
+}
+
 int main(int argc, char** argv){
 	//Initialize everything
 	Uint32 sound_len[4] = {0};
@@ -310,24 +337,42 @@ int main(int argc, char** argv){
 		return 1;
 	}
 	
+	audio_pos = sound_buf[0];
+	audio_len = sound_len[0];
+	audio_spec.callback = SDL_audio_callback;
+	audio_spec.userdata = NULL;
+	
+	if(SDL_OpenAudio(&audio_spec,NULL) < 0){
+		cout << "Failed opening audio device\n" << SDL_GetError() <<endl;
+		return 1;
+	}
+	SDL_PauseAudio(0);
 	//everything initialized ( TODO : SDL will need some attention)
+	
+	cout << "Everything initialized!" << endl;
+	for(int i=3;i>0;i--){
+		cout << "Starting in "<< i << " second/s" << endl;
+		usleep(1000000);
+	}
 	
 	//run thread for touch detection
 	int re1 = 0;
 	pthread_t sense;
-
 	if(pthread_create(&sense, NULL, update_state, (void *)re1)){
 		cout << "Error: Could not start sense_thread!\n";
 		return 1;
 	}
 	
+	cout << "Successfuly created background detection thread" << endl;
+	cout << "\n\nSTART PLAYING!!!\n\n" << flush;
+	
 	bool hold;
-	int gesture;
+	int prev_gesture = 0, gesture, posx, posy, pitch;
 	//while sense thread is going -> we produce sounds
 	while(pthread_kill(sense,0) == 0 ) 
 	{
 		gesture = 0;
-		hold = detect_hold();
+		hold = detect_hold(); //TODO works badly
 		//if(!hold)
 			gesture = detect_gesture();
 		
@@ -335,8 +380,46 @@ int main(int argc, char** argv){
 			cout << "hold: " << hold << " " ;
 			cout << "gesture: " << gesture << "\n" << flush;
 		}
+
+		if(gesture == 0){
+			SDL_LockAudio();
+			audio_pos=sound_buf[0];
+			audio_len=sound_len[0];
+			SDL_UnlockAudio();
+		}
 		
+		//change sound if needed
+		if(prev_gesture != gesture || audio_len < 40000){
+			
+			//read gesture and pitch
+			posx = joystick_x-sjoy_x;
+			posy = joystick_y-sjoy_y;
+			pitch = (int)sqrt((posx*posx) + (posy*posy));
+			
+			SDL_LockAudio();
+			
+			audio_spec.freq = 44100 + (pitch * 5);
+			audio_len = sound_len[gesture];
+			audio_pos = sound_buf[gesture];
+			
+			SDL_CloseAudio();
+			if(SDL_OpenAudio(&audio_spec,NULL) < 0){
+				cout << "Failed opening audio device\n" << SDL_GetError() <<endl;
+				return 1;	
+			}
+			SDL_PauseAudio(0);
+			
+			SDL_UnlockAudio();
+			
+		}
 		usleep(MICRO_S_SLEEP_SOUND);
 	}
+	SDL_CloseAudio();
+	for(int i= 0;i<4;i++){
+		SDL_FreeWAV(sound_buf[i]);
+	}
+	
+	cout << "Thread died, killing this whole thing!" << endl;
+	
 	return 0;
 }
