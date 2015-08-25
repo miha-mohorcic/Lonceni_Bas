@@ -20,14 +20,14 @@
 #include "SDL2/SDL.h"
 
 //defines
-#define DEBUG_SOUND true
+#define DEBUG_SOUND false
 #define DEBUG_INPUT false
 #define USE_JOYSTICK true
 #define USE_MPR121 true
 #define TOUCH_INPUTS 8
-#define MICRO_S_SLEEP_UPDATE 25000 // delay between MPR updates
-#define MICRO_S_SLEEP_SOUND 25000  // delay for sound production
-#define HIST_INP_HOLD_SAMPLE 30
+#define MICRO_S_SLEEP_UPDATE 2500 // delay between MPR updates
+#define MICRO_S_SLEEP_SOUND 2500  // delay for sound production
+#define HIST_INP_HOLD_SAMPLE 15
 #define HIST_INP_SAMPLE 10
 
 
