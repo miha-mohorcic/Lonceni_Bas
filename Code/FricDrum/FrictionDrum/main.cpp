@@ -204,6 +204,13 @@ int read_files(Uint32* sound_len, float ** sound_buf){
 	return 0;
 }
 
+bool detect_hold(){
+	
+}
+
+int detect_gesture(){
+}
+
 int main(int argc, char** argv){
 	//Initialize everything
 	Uint32 sound_len[4] = {0};
@@ -223,7 +230,7 @@ int main(int argc, char** argv){
 	
 	if(USE_MPR121){
 		if(initialize_touch() != 0){
-			cout << "Problem initializing touch sensor\n";
+			cout << "Proble-m initializing touch sensor\n";
 			return 1;
 		}	
 	}
