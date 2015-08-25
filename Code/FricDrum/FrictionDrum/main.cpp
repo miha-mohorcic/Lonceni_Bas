@@ -16,8 +16,6 @@
 // touch sensor
 #include "mpr121.h" // only register definitions
 #include "wiringPiI2C.h" 
-// WAV pitching
-#include <soundtouch/SoundTouch.h>
 // WAV playing 
 #include "SDL2/SDL.h"
 
