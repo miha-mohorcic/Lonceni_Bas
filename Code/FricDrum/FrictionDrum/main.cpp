@@ -26,15 +26,13 @@
 #define DEBUG_SOUND false
 #define DEBUG_INPUT false
 #define DEBUG_SDL 	false
-#define USE_JOYSTICK true
-#define USE_MPR121 true
 #define TOUCH_INPUTS 8
 //delays should be big enough
 #define MICRO_S_SLEEP_UPDATE 2000 // delay between MPR updates
-#define MICRO_S_SLEEP_SOUND 2000  // delay for sound production
+#define MICRO_S_SLEEP_SOUND  500  // delay for sound production
 #define HIST_INP_HOLD_SAMPLE 100
-#define HIST_INP_SAMPLE 10
-
+#define HIST_INP_SAMPLE      10
+#define NUM_SAMPLES 25
 
 //global variables
 uint16_t touched = 0; //global bitwise status of currently active inputs
@@ -46,28 +44,25 @@ uint16_t sjoy_y = 0;
 using namespace std;
 
 int MPR121_ADDR = 0; //file descriptor for MPR121
-uint write_MPR(int reg, int data){
+static uint write_MPR(int reg, int data){
 	return wiringPiI2CWriteReg8(MPR121_ADDR, (reg & 0xff), (data & 0xff));
 }
 
-uint8_t read_MPR(int reg){
+static uint8_t read_MPR(int reg){
 	return wiringPiI2CReadReg8(MPR121_ADDR, (reg & 0xff));
 }
 
-void *update_state(void *threadid){
+static void *update_state(void *threadid){
 	uint8_t lsb, msb;
 	while(true)
 	{
-		//analogRead(100); //read joystick pressed status
-		if(USE_JOYSTICK){
-			joystick_x = analogRead(101); //read joystick x pitch
-			joystick_y = analogRead(102); //read joystick y pitch
-		}
-		if(USE_MPR121){
-			lsb = read_MPR(0);
-			msb = read_MPR(1);
-			touched = ((msb << 8) | lsb) ;
-		}
+		//analogRead(100); //read joystick pressed status	
+		joystick_x = analogRead(101); //read joystick x pitch
+		joystick_y = analogRead(102); //read joystick y pitch
+				
+		lsb = read_MPR(0);
+		msb = read_MPR(1);
+		touched = ((msb << 8) | lsb) ;
 		
 		if(DEBUG_INPUT){
 			int mask = 1;
@@ -86,7 +81,7 @@ void *update_state(void *threadid){
 	pthread_exit(NULL);
 }
 
-int initialize_SDL(){
+static int initialize_SDL(){
 	if(SDL_Init(SDL_INIT_AUDIO) < 0){
 		cout << "SDL NOT INITIALIZED!\n" << SDL_GetError()  << endl;
 		return 1;
@@ -95,7 +90,7 @@ int initialize_SDL(){
 	return 0;
 }
 
-int initialize_touch(){
+static int initialize_touch(){
 	cout << "starting MPR setup\n";
 	system("gpio load i2c");
 	MPR121_ADDR = wiringPiI2CSetup(0x5a); // default address
@@ -170,7 +165,7 @@ int initialize_touch(){
 	return 0;
 }
 
-int initialize_joystick(){
+static int initialize_joystick(){
 	wiringPiSetup();
 	mcp3004Setup(100,0);
 	sjoy_x = analogRead(101);
@@ -179,48 +174,100 @@ int initialize_joystick(){
 	return 0;
 }
 
-int read_files(Uint32* sound_len, float ** sound_buf, SDL_AudioSpec* audio_spec){
+static int read_files(
+					float* sound_tap, Uint32 sound_tap_len, 
+					float* sound_sil, Uint32 sound_sil_len,
+					float** sound_up, Uint32* sound_up_len,
+					float** sound_down, Uint32* sound_down_len,
+					SDL_AudioSpec* audio_spec)
+	{
 	cout << "  Reading and initializing media files." << endl;
-		SNDFILE *sf;
-    SF_INFO info;
-    int num_items;
-    int f;
-    int sr;
-    int c;
-    char const * file_names[3] = {"C.wav","D.wav","E.wav"};
-    for(int i=0;i<3;i++){
+	SNDFILE *sf;    SF_INFO info;
+    int num_items;    int f;    int sr;    int c;
+    
+    //up files
+    for(int i=0;i<NUM_SAMPLES;i++){
 		/* Open the WAV file. */
 		info.format = 0;
-		sf = sf_open(file_names[i],SFM_READ,&info);
+		string file_name = "samples/up"+ to_string(i)+".wav";
+		sf = sf_open(file_name.c_str() ,SFM_READ,&info);
 		if (sf == NULL){
-			printf("Failed to open the file %d.\n",i);
+			printf("Failed to open the up file %d.\n",i);
 			return 1;
 		}
 		f = info.frames;
 		sr = info.samplerate;
 		c = info.channels;
+		
+		cout << " frames: " << f << " samplerate: " << sr << "channels: "  << c << " ";
+		
 		num_items = f*c;
 		/* Allocate space for the data to be read, then read it. */
-		sound_buf[i+1] = (float *) malloc(num_items*sizeof(float));
-		sf_read_float(sf,sound_buf[i+1],num_items);
+		sound_up[i] = (float *) malloc(num_items*sizeof(float));
+		sf_read_float(sf,sound_up[i],num_items);
 		sf_close(sf);
-		sound_len[i+1]=(Uint32)num_items;
-		printf(" Opened File %d.\n",i);
+		sound_up_len[i]=(Uint32)num_items;
+		printf(" Opened up File %d.\n",i);
 	}
-	//make room for 1s silence
-	sound_len[0]= sr;
-	sound_buf[0]= (float *)calloc(sr, sizeof(float));
+	
+	//down file
+	for(int i=0;i<NUM_SAMPLES;i++){
+		/* Open the WAV file. */
+		info.format = 0;
+		string file_name = "samples/down"+ to_string(i)+".wav";
+		sf = sf_open(file_name.c_str() ,SFM_READ,&info);
+		if (sf == NULL){
+			printf("Failed to open the downfile %d.\n",i);
+			return 1;
+		}
+		f = info.frames;
+		sr = info.samplerate;
+		c = info.channels;
+		
+		cout << " frames: " << f << " samplerate: " << sr << "channels: "  << c << " ";
+		
+		num_items = f*c;
+		/* Allocate space for the data to be read, then read it. */
+		sound_down[i] = (float *) malloc(num_items*sizeof(float));
+		sf_read_float(sf,sound_down[i],num_items);
+		sf_close(sf);
+		sound_down_len[i]=(Uint32)num_items;
+		printf(" Opened down File %d.\n",i);
+	}
+	
+	/* Open the WAV file. */
+	info.format = 0;
+	string file_name = "samples/tap.wav";
+	sf = sf_open(file_name.c_str() ,SFM_READ,&info);
+	if (sf == NULL){
+		printf("Failed to open the tap file\n");
+		return 1;
+	}
+	f = info.frames;
+	sr = info.samplerate;
+	c = info.channels;
+	num_items = f*c;
+	
+	cout << " frames: " << f << " samplerate: " << sr << "channels: "  << c << " ";
+	
+	/* Allocate space for the data to be read, then read it. */
+	sound_tap = (float *) malloc(num_items*sizeof(float));
+	sf_read_float(sf,sound_tap,num_items);
+	sf_close(sf);
+	sound_tap_len = (Uint32)num_items;
+	printf(" Opened tap File");
+	
 	cout << "\nLoading all files OK\n";
 	return 0;
 }
 
-void update_hist(uint16_t *hist){
+static void update_hist(uint16_t *hist){
 	for(int i = 1; i < HIST_INP_HOLD_SAMPLE; i++)
 		hist[i-1] = hist[i];
 	hist[HIST_INP_HOLD_SAMPLE -1] = touched;
 }
 
-bool detect_hold(){
+static bool detect_hold(){
 	static uint16_t hist[HIST_INP_HOLD_SAMPLE] = {0};
 	static bool comp = true;
 	static bool hold = true;
@@ -246,7 +293,7 @@ bool detect_hold(){
 	return hold;
 }
 
-int detect_gesture(){
+static int detect_gesture(){
 	static double hist_avg_sample[HIST_INP_SAMPLE]; //remember history
 	double avg = 0.0;
 
@@ -310,62 +357,72 @@ int detect_gesture(){
 float *audio_pos;
 Uint32 audio_len;
 
-void SDL_audio_callback(void* udata, Uint8* stream, int len){
-	static int sample_len = 8820; // 10th of a second is max sample length
+static void SDL_audio_callback(void* udata, Uint8* stream, int len){
+		
+	//static int sample_len = 4410; // 10th of a second is max sample length
 	if(audio_len==0)
 		return;
 	
 	len=(len > (int)audio_len ? audio_len : len);
-	len=(len > sample_len ? sample_len : len);
+	//len=(len > sample_len ? sample_len : len);
 	SDL_memcpy(stream, audio_pos,len);
-	if(DEBUG_SDL){
-		cout << len << " " << sample_len << " " << audio_len << "\n" << flush;
-	}
+	
 }
 
 int main(int argc, char** argv){
 	//Initialize everything
-	Uint32 sound_len[4] = {0};
-	float** sound_buf = (float **)calloc(4,sizeof(float *));
+	Uint32 sound_tap_len = 0;
+	float * sound_tap;
+	Uint32 sound_sil_len = 44100;
+	float * sound_sil = (float *)calloc(44100, sizeof(float));
+	
+	Uint32 sound_up_len[NUM_SAMPLES] = {0};
+	float** sound_up = (float **)calloc(NUM_SAMPLES,sizeof(float *));
+	Uint32 sound_down_len[NUM_SAMPLES] = {0};
+	float** sound_down = (float **)calloc(NUM_SAMPLES,sizeof(float *));
+	
 	SDL_AudioSpec audio_spec;
 	
-	if(read_files(sound_len, sound_buf, &audio_spec) != 0){
+	if(read_files(	sound_tap, sound_tap_len, 
+					sound_sil, sound_sil_len,
+					sound_up, sound_up_len,
+					sound_down, sound_down_len,
+					&audio_spec) != 0)
+	{
 		cout << "Problem reading files!\n";
 		return 1; 
 	}
 	
-	if(USE_JOYSTICK){
-		if(initialize_joystick() != 0){
-			cout << "Problem initializing joystick\n";
-			return 1;
-		}
+	if(initialize_joystick() != 0){
+		cout << "Problem initializing joystick\n";
+		return 1;
 	}
 	
-	if(USE_MPR121){
-		if(initialize_touch() != 0){
-			cout << "Proble-m initializing touch sensor\n";
-			return 1;
-		}	
-	}
+	
+	if(initialize_touch() != 0){
+		cout << "Proble-m initializing touch sensor\n";
+		return 1;
+	}	
+
 	
 	if(initialize_SDL() != 0){
 		cout << "Problem initializing SDL\n";
 		return 1;
 	}
 	
-	audio_pos = sound_buf[0];
-	audio_len = sound_len[0];
-	audio_spec.channels = 2;
+	audio_pos = sound_sil;
+	audio_len = sound_sil_len;
+	
 	audio_spec.format = AUDIO_F32SYS;
-	audio_spec.callback = SDL_audio_callback;
 	audio_spec.userdata = NULL;
+	audio_spec.channels = 2;
+	audio_spec.callback = SDL_audio_callback;
 	
 	if(SDL_OpenAudio(&audio_spec,NULL) < 0){
 		cout << "Failed opening audio device\n" << SDL_GetError() <<endl;
 		return 1;
 	}
 	SDL_PauseAudio(0);
-	//everything initialized ( TODO : SDL will need some attention)
 	
 	cout << "Everything initialized!" << endl;
 	for(int i=3;i>0;i--){
@@ -401,24 +458,30 @@ int main(int argc, char** argv){
 
 		if(gesture == 0){
 			SDL_LockAudio();
-			audio_pos=sound_buf[0];
-			audio_len=sound_len[0];
+			audio_pos=sound_sil;
+			audio_len=sound_sil_len;
 			SDL_UnlockAudio();
-		}
-		
-		//change sound if needed
-		if(prev_gesture != gesture || audio_len < 40000){
-			
-			//read gesture and pitch
+		}else if(prev_gesture != gesture){
+			//calc pitch
 			posx = joystick_x-sjoy_x;
 			posy = joystick_y-sjoy_y;
-			pitch = (int)sqrt((posx*posx) + (posy*posy));
-			if(DEBUG_SOUND)
-				cout << " pitch: " << pitch * 5 << " " ;
-			
+			pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 20 );
+					
 			SDL_LockAudio();
-			audio_len = sound_len[gesture];
-			audio_pos = sound_buf[gesture];
+			
+			switch(gesture){
+				case 1: 
+					audio_len = sound_down_len[pitch];
+					audio_pos = sound_down[pitch];
+					break;
+				case 2: 
+					audio_len = sound_up_len[pitch];
+					audio_pos = sound_up[pitch];
+					break;
+				default: 
+					audio_len = sound_tap_len;
+					audio_pos = sound_tap;
+			}
 			SDL_UnlockAudio();
 			
 		}
@@ -427,10 +490,13 @@ int main(int argc, char** argv){
 	
 	//free space before closing
 	SDL_CloseAudio();
-	for(int i= 0;i<4;i++){
-		free(sound_buf[i]);
+	for(int i= 0;i<NUM_SAMPLES;i++){
+		free(sound_up[i]);
+		free(sound_up[i]);
 	}
-	free(sound_buf);
+	free(sound_up);
+	free(sound_down);
+	free(sound_sil);
 	
 	cout << "Thread died, killing this whole thing!" << endl;
 	
