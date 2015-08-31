@@ -196,7 +196,7 @@ static int initialize_joystick(){
 }
 
 static int read_files(
-					Uint8* sound_tap, Uint32 sound_tap_len, 
+					Uint8** sound_tap, Uint32* sound_tap_len, 
 					Uint8* sound_sil, Uint32 sound_sil_len,
 					Uint8** sound_up, Uint32* sound_up_len,
 					Uint8** sound_down, Uint32* sound_down_len,
@@ -228,7 +228,7 @@ static int read_files(
 	
 	/* Open the WAV file. */
 	file_name = "samples/tap.wav";
-	if(SDL_LoadWAV(file_name.c_str(), audio_spec, &sound_tap, &sound_tap_len) == NULL){
+	if(SDL_LoadWAV(file_name.c_str(), audio_spec, sound_tap, sound_tap_len) == NULL){
 		cout << "Error opening tap file "  << endl;
 		return 1;
 	}
@@ -352,6 +352,7 @@ static int detect_gesture(){
 
 Uint8 *audio_pos;
 Uint32 audio_len;
+Uint32 audio_played;
 
 static void SDL_audio_callback(void* udata, Uint8* stream, int len){
 		
@@ -363,6 +364,7 @@ static void SDL_audio_callback(void* udata, Uint8* stream, int len){
 	
 	audio_pos+=len;
 	audio_len-=len;
+	audio_played+=len;
 }
 
 int main(int argc, char** argv){
@@ -379,7 +381,7 @@ int main(int argc, char** argv){
 	
 	SDL_AudioSpec audio_spec;
 	
-	if(read_files(	sound_tap, sound_tap_len, 
+	if(read_files(	&sound_tap, &sound_tap_len, 
 					sound_sil, sound_sil_len,
 					sound_up, sound_up_len,
 					sound_down, sound_down_len,
@@ -388,9 +390,7 @@ int main(int argc, char** argv){
 		cout << "Problem reading files!\n";
 		return 1; 
 	}
-	
-	cout << endl << endl<<  sound_tap_len << endl << endl;
-	
+		
 	if(initialize_joystick() != 0){
 		cout << "Problem initializing joystick\n";
 		return 1;
@@ -433,7 +433,7 @@ int main(int argc, char** argv){
 	cout << "Everything initialized!" << endl;
 	for(int i=3;i>0;i--){
 		cout << "Starting in "<< i << " second/s" << endl;
-		usleep(1000000);
+		usleep(500000);
 	}
 	
 	//run thread for touch detection
@@ -454,7 +454,7 @@ int main(int argc, char** argv){
 	cout << "\n\nSTART PLAYING!!!\n\n" << flush;
 	
 	bool hold;
-	int prev_gesture = 0, posx, posy, pitch;
+	int prev_gesture = 0, posx, posy, pitch, prev_pitch = 0;
 	//while sense thread is going -> we produce sounds
 	while(run_program && pthread_kill(sense,0) == 0 ) 
 	{
@@ -468,19 +468,19 @@ int main(int argc, char** argv){
 			cout << "gesture: " << gesture << "\n" << flush;
 		}
 		
+		//calc pitch
+		posx = joystick_x-sjoy_x;
+		posy = joystick_y-sjoy_y;
+		pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 20 );
+					
 		if(gesture == 0){
 				SDL_LockAudio();
 				audio_len = sound_sil_len;
 				audio_pos = sound_sil;	
+				audio_played = 0;
 				SDL_UnlockAudio();
 		}else if((prev_gesture != gesture && audio_len == 0) || (prev_gesture == 0 && gesture != 0)){
-			//calc pitch
-			posx = joystick_x-sjoy_x;
-			posy = joystick_y-sjoy_y;
-			pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 20 );
-					
 			SDL_LockAudio();
-			
 			switch(gesture){
 				case 1: 
 					audio_len = sound_down_len[pitch];
@@ -494,9 +494,26 @@ int main(int argc, char** argv){
 					audio_len = sound_tap_len;
 					audio_pos = sound_tap;
 			}
+			audio_played = 0;
 			SDL_UnlockAudio();
-			
+		}else if(prev_gesture == gesture && pitch != prev_pitch){
+			SDL_LockAudio();
+			switch(gesture){
+				case 1: 
+					audio_len = sound_down_len[pitch]-audio_played;
+					audio_pos = sound_down[pitch]+audio_played;
+					break;
+				case 2: 
+					audio_len = sound_up_len[pitch]-audio_played;
+					audio_pos = sound_up[pitch]+audio_played;
+					break;
+				default:
+					audio_len = sound_tap_len-audio_played;
+					audio_pos = sound_tap+audio_played;
+			}
+			SDL_UnlockAudio();
 		}
+		
 		prev_gesture = gesture;
 		usleep(MICRO_S_SLEEP_SOUND);
 	}
