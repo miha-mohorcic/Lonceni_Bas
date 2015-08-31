@@ -21,7 +21,7 @@
 #include "SDL2/SDL.h"
 
 //defines
-#define DEBUG_SOUND true
+#define DEBUG_SOUND false
 #define DEBUG_INPUT false
 #define DEBUG_SDL 	false
 #define TOUCH_INPUTS 8
@@ -29,7 +29,7 @@
 #define MICRO_S_SLEEP_UPDATE 10000 	// delay between MPR updates
 #define MICRO_S_SLEEP_SOUND  10000  	// delay for sound production
 #define HIST_INP_HOLD_SAMPLE 100
-#define HIST_INP_SAMPLE      10
+#define HIST_INP_SAMPLE      5
 #define NUM_SAMPLES 25				// # pitch shifted samples
 
 //global variables
@@ -270,6 +270,7 @@ static bool detect_hold(){
 }
 
 static int detect_gesture(){
+	static int hist_gesture[HIST_INP_SAMPLE];
 	static double hist_avg_sample[HIST_INP_SAMPLE]; //remember history
 	double avg = 0.0;
 
@@ -315,19 +316,38 @@ static int detect_gesture(){
 		mask <<= 1;
 	}
 
-	if(avg < 0.0) {
-	//cout << "1" << endl;
-	return 1;
+	int gest = 0;
+	if(avg < 0.0) 
+		gest = 1;
+	else if(avg > 0.0)
+		gest = 2;
+	else if (tap) 
+		gest = 3;
+	
+	int hist_gesture_count[4] = {0};
+	
+	hist_gesture_count[gest] = 1;
+	for(int i=1;i<HIST_INP_SAMPLE;i++){//update gesture history while doing it
+		hist_gesture[i-1] = hist_gesture[i];
+		hist_gesture_count[hist_gesture[i]] =  hist_gesture_count[hist_gesture[i]] +1;
 	}
-	else if(avg > 0.0) {
-	//cout << "2" << endl;
+	hist_gesture[HIST_INP_SAMPLE-1] = gest;
+	
+	if(gest == 3) //tap
+		return 3;
+	
+	//return mode for gestures
+	short m=0;
+	int mnum = hist_gesture_count[0];
+	if(mnum < hist_gesture_count[1]){
+		m = 1;
+		mnum = hist_gesture_count[1];
+	}
+	if(mnum < hist_gesture_count[2]){
 		return 2;
 	}
-	else if (tap) {
-	//cout << "Tap!" << endl;
-		return 3;
-	}
-	return 0;
+	
+	return m;
 }
 
 Uint8 *audio_pos;
