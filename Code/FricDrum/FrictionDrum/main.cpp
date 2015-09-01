@@ -29,7 +29,7 @@
 #define MICRO_S_SLEEP_UPDATE 10000 	// delay between MPR updates
 #define MICRO_S_SLEEP_SOUND  10000  	// delay for sound production
 #define HIST_INP_HOLD_SAMPLE 100
-#define HIST_INP_SAMPLE      5
+#define HIST_INP_SAMPLE      10
 #define NUM_SAMPLES 25				// # pitch shifted samples
 
 //global variables
@@ -407,14 +407,7 @@ int main(int argc, char** argv){
 		cout << "Problem initializing SDL\n";
 		return 1;
 	}
-	
-	//Uint8* outputsound;
-	//Uint32 outputsoundlen;
-	//cout << SDL_LoadWAV("output.wav",&audio_spec,&outputsound,&outputsoundlen) << endl;
-	//audio_pos = outputsound;
-	//audio_len = outputsoundlen;
-	
-	
+		
 	audio_len = sound_sil_len;
 	audio_pos = sound_sil;
 	
@@ -426,9 +419,6 @@ int main(int argc, char** argv){
 		return 1;
 	}
 	SDL_PauseAudio(0);
-	while(audio_len > 0 ){
-		SDL_Delay(1000);
-	}
 	
 	cout << "Everything initialized!" << endl;
 	for(int i=3;i>0;i--){
@@ -471,7 +461,7 @@ int main(int argc, char** argv){
 		//calc pitch
 		posx = joystick_x-sjoy_x;
 		posy = joystick_y-sjoy_y;
-		pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 20 );
+		pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 25 );
 					
 		if(gesture == 0){
 				SDL_LockAudio();
@@ -496,7 +486,7 @@ int main(int argc, char** argv){
 			}
 			audio_played = 0;
 			SDL_UnlockAudio();
-		}else if(prev_gesture == gesture && pitch != prev_pitch){
+		}/*else if(prev_gesture == gesture && pitch != prev_pitch){
 			SDL_LockAudio();
 			switch(gesture){
 				case 1: 
@@ -512,7 +502,7 @@ int main(int argc, char** argv){
 					audio_pos = sound_tap+audio_played;
 			}
 			SDL_UnlockAudio();
-		}
+		}*/
 		
 		prev_gesture = gesture;
 		usleep(MICRO_S_SLEEP_SOUND);
