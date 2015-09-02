@@ -3,7 +3,6 @@
 /// UL FRI - LGM Project ///
 ////////////////////////////
 
-//includes
 // standard IO
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,19 +19,17 @@
 // WAV playing 
 #include "SDL2/SDL.h"
 
-//defines
 #define DEBUG_SOUND false
 #define DEBUG_INPUT false
 #define DEBUG_SDL 	false
 #define TOUCH_INPUTS 8
 //delays should be big enough
 #define MICRO_S_SLEEP_UPDATE 10000 	// delay between MPR updates
-#define MICRO_S_SLEEP_SOUND  10000  	// delay for sound production
+#define MICRO_S_SLEEP_SOUND  10000  // delay for sound production
 #define HIST_INP_HOLD_SAMPLE 100
 #define HIST_INP_SAMPLE      10
 #define NUM_SAMPLES 25				// # pitch shifted samples
 
-//global variables
 static bool run_program = true;
 static uint16_t touched = 0; //global bitwise status of currently active inputs
 static uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
@@ -87,9 +84,9 @@ static void *update_state(void *threadid){
 		
 		if(DEBUG_INPUT){
 			int mask = 1;
-			for(int i=0;i<TOUCH_INPUTS;i++){
+			for(int i = 0; i < TOUCH_INPUTS; i++){
 				cout << ((mask & touched) > 0);
-				mask <<=1;
+				mask <<= 1;
 			}
 			cout << "\tjoystick x: " << joystick_x << "  ";
 			cout << "\tjoystick y: " << joystick_y << "  ";
@@ -122,13 +119,13 @@ static int initialize_touch(){
 	// start MPR121 registers setup
 	write_MPR(ELE_CFG, 0x00); 
 
-	// filtering when data is > baseline.
+	// filtering when data is > baseline
 	write_MPR(MHD_R, 0x01);
 	write_MPR(NHD_R, 0x01);
 	write_MPR(NCL_R, 0x00);
 	write_MPR(FDL_R, 0x00);
 
-	// filtering when data is < baseline.
+	// filtering when data is < baseline
 	write_MPR(MHD_F, 0x01);
 	write_MPR(NHD_F, 0x01);
 	write_MPR(NCL_F, 0xFF);
@@ -247,6 +244,7 @@ static bool detect_hold(){
 	static uint16_t hist[HIST_INP_HOLD_SAMPLE] = {0};
 	static bool comp = true;
 	static bool hold = true;
+	
 	if(comp){
 		uint16_t mask;
 		update_hist(hist);
@@ -255,7 +253,7 @@ static bool detect_hold(){
 			hold = true;
 			mask = 1 << j;
 			for(int i = 0; i < HIST_INP_HOLD_SAMPLE; i++){
-				if(0 == (hist[i] &&mask)){
+				if(0 == (hist[i] && mask)){
 					hold = false;
 					break;
 				}
@@ -423,11 +421,7 @@ int main(int argc, char** argv){
 	SDL_PauseAudio(0);
 	
 	cout << "Everything initialized!" << endl;
-	for(int i=3;i>0;i--){
-		cout << "Starting in "<< i << " second/s" << endl;
-		usleep(500000);
-	}
-	
+
 	//run thread for touch detection
 	int re2 = 0;
 	pthread_t user_inp;
@@ -451,7 +445,7 @@ int main(int argc, char** argv){
 	while(run_program && pthread_kill(sense,0) == 0 ) 
 	{
 		gesture = 0;
-		hold = detect_hold(); //TODO works badly
+		hold = detect_hold();
 		if(!hold)
 			gesture = detect_gesture();
 		
@@ -492,20 +486,19 @@ int main(int argc, char** argv){
 			SDL_LockAudio();
 			switch(gesture){
 				case 1: 
-					audio_len = sound_down_len[pitch]-audio_played;
-					audio_pos = sound_down[pitch]+audio_played;
+					audio_len = sound_down_len[pitch] - audio_played;
+					audio_pos = sound_down[pitch] + audio_played;
 					break;
 				case 2: 
-					audio_len = sound_up_len[pitch]-audio_played;
-					audio_pos = sound_up[pitch]+audio_played;
+					audio_len = sound_up_len[pitch] - audio_played;
+					audio_pos = sound_up[pitch] + audio_played;
 					break;
 				default:
-					audio_len = sound_tap_len-audio_played;
-					audio_pos = sound_tap+audio_played;
+					audio_len = sound_tap_len - audio_played;
+					audio_pos = sound_tap + audio_played;
 			}
 			SDL_UnlockAudio();
 		}
-		
 		prev_gesture = gesture;
 		usleep(MICRO_S_SLEEP_SOUND);
 	}
@@ -517,7 +510,7 @@ int main(int argc, char** argv){
 		
 	//free space before closing
 	SDL_CloseAudio();
-	for(int i= 0;i<NUM_SAMPLES;i++){
+	for(int i = 0; i < NUM_SAMPLES; i++){
 		free(sound_up[i]);
 		free(sound_down[i]);
 	}
