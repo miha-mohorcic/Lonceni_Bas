@@ -355,16 +355,18 @@ Uint32 audio_len;
 Uint32 audio_played;
 
 static void SDL_audio_callback(void* udata, Uint8* stream, int len){
-		
-	if(audio_len==0)
+	if (audio_len == 0) {
+		memset(stream, 0, len);
 		return;
+	}
 	
-	len=(len > (int)audio_len ? audio_len : len);
+	len = (len > (int) audio_len ? audio_len : len);
+	
 	SDL_memcpy(stream, audio_pos,len);
 	
-	audio_pos+=len;
-	audio_len-=len;
-	audio_played+=len;
+	audio_pos += len;
+	audio_len -= len;
+	audio_played += len;
 }
 
 int main(int argc, char** argv){
@@ -462,7 +464,7 @@ int main(int argc, char** argv){
 		posx = joystick_x-sjoy_x;
 		posy = joystick_y-sjoy_y;
 		pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 25 );
-					
+		
 		if(gesture == 0){
 				SDL_LockAudio();
 				audio_len = sound_sil_len;
@@ -486,7 +488,7 @@ int main(int argc, char** argv){
 			}
 			audio_played = 0;
 			SDL_UnlockAudio();
-		}/*else if(prev_gesture == gesture && pitch != prev_pitch){
+		}else if(prev_gesture == gesture && pitch != prev_pitch){
 			SDL_LockAudio();
 			switch(gesture){
 				case 1: 
@@ -502,7 +504,7 @@ int main(int argc, char** argv){
 					audio_pos = sound_tap+audio_played;
 			}
 			SDL_UnlockAudio();
-		}*/
+		}
 		
 		prev_gesture = gesture;
 		usleep(MICRO_S_SLEEP_SOUND);
