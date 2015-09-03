@@ -14,7 +14,7 @@
 #include "wiringPi.h"
 #include <mcp3004.h>
 // touch sensor
-#include "mpr121.h" // only register definitions
+#include "mpr121.h" //only register definitions
 #include "wiringPiI2C.h" 
 // WAV playing 
 #include "SDL2/SDL.h"
@@ -24,11 +24,11 @@
 #define DEBUG_SDL 	false
 #define TOUCH_INPUTS 8
 //delays should be big enough
-#define MICRO_S_SLEEP_UPDATE 10000 	// delay between MPR updates
-#define MICRO_S_SLEEP_SOUND  10000  // delay for sound production
+#define MICRO_S_SLEEP_UPDATE 10000 	//delay between MPR updates
+#define MICRO_S_SLEEP_SOUND  10000  //delay for sound production
 #define HIST_INP_HOLD_SAMPLE 100
 #define HIST_INP_SAMPLE      10
-#define NUM_SAMPLES 25				// # pitch shifted samples
+#define NUM_SAMPLES 25				//number of pitch shifted samples
 
 static bool run_program = true;
 static uint16_t touched = 0; //global bitwise status of currently active inputs
@@ -41,6 +41,7 @@ static int gesture;
 using namespace std;
 
 int MPR121_ADDR = 0; //file descriptor for MPR121
+
 static uint write_MPR(int reg, int data){
 	return wiringPiI2CWriteReg8(MPR121_ADDR, (reg & 0xff), (data & 0xff));
 }
@@ -84,7 +85,8 @@ static void *update_state(void *threadid){
 		
 		if(DEBUG_INPUT){
 			int mask = 1;
-			for(int i = 0; i < TOUCH_INPUTS; i++){
+			int i;
+			for(i = 0; i < TOUCH_INPUTS; i++){
 				cout << ((mask & touched) > 0);
 				mask <<= 1;
 			}
@@ -101,7 +103,7 @@ static void *update_state(void *threadid){
 
 static int initialize_SDL(){
 	if(SDL_Init(SDL_INIT_AUDIO) < 0){
-		cout << "SDL NOT INITIALIZED!\n" << SDL_GetError()  << endl;
+		cout << "SDL not initialized\n" << SDL_GetError()  << endl;
 		return 1;
 	}
 	cout << "SDL OK\n";
@@ -111,27 +113,27 @@ static int initialize_SDL(){
 static int initialize_touch(){
 	cout << "starting MPR setup\n";
 	system("gpio load i2c");
-	MPR121_ADDR = wiringPiI2CSetup(0x5a); // default address
+	MPR121_ADDR = wiringPiI2CSetup(0x5a); //default address
 	if(MPR121_ADDR == -1){
 		cout << "MPR121 NOT OK\n" << flush;
 		return 1;
 	} 
-	// start MPR121 registers setup
+	//start MPR121 registers setup
 	write_MPR(ELE_CFG, 0x00); 
 
-	// filtering when data is > baseline
+	//filtering when data is > baseline
 	write_MPR(MHD_R, 0x01);
 	write_MPR(NHD_R, 0x01);
 	write_MPR(NCL_R, 0x00);
 	write_MPR(FDL_R, 0x00);
 
-	// filtering when data is < baseline
+	//filtering when data is < baseline
 	write_MPR(MHD_F, 0x01);
 	write_MPR(NHD_F, 0x01);
 	write_MPR(NCL_F, 0xFF);
 	write_MPR(FDL_F, 0x02);
 
-	// touch and release thresholds for each electrode
+	//touch and release thresholds for each electrode
 	write_MPR(ELE0_T, TOU_THRESH);
 	write_MPR(ELE0_R, REL_THRESH);
 
@@ -188,7 +190,7 @@ static int initialize_joystick(){
 	mcp3004Setup(100,0);
 	sjoy_x = analogRead(101);
 	sjoy_y = analogRead(102);
-	cout << "Joystick OK!\n";
+	cout << "Joystick OK\n";
 	return 0;
 }
 
@@ -201,9 +203,8 @@ static int read_files(
 	{
 	cout << "  Reading and initializing media files." << endl;
 	string file_name;
-    //up files
-    for(int i=0;i<NUM_SAMPLES;i++){
-		/* Open the WAV file. */
+    //gesture up files
+    for(int i = 0; i < NUM_SAMPLES; i++){
 		file_name = "samples/up"+ to_string(i)+".wav";
 		if(SDL_LoadWAV(file_name.c_str(), audio_spec, &sound_up[i], &sound_up_len[i]) == NULL){
 			cout << "Error opening file up" << i << endl;
@@ -212,9 +213,8 @@ static int read_files(
 		printf(" Opened up File %d.\n",i);
 	}
 	
-	//down file
-	for(int i=0;i<NUM_SAMPLES;i++){
-		/* Open the WAV file. */
+	//gesture down files
+	for(int i = 0; i < NUM_SAMPLES; i++){
 		file_name = "samples/down"+ to_string(i)+".wav";
 		if(SDL_LoadWAV(file_name.c_str(), audio_spec, &sound_down[i], &sound_down_len[i]) == NULL){
 			cout << "Error opening file down" << i << endl;
@@ -223,10 +223,10 @@ static int read_files(
 		printf(" Opened down File %d.\n",i);
 	}
 	
-	/* Open the WAV file. */
+	//tap file
 	file_name = "samples/tap.wav";
 	if(SDL_LoadWAV(file_name.c_str(), audio_spec, sound_tap, sound_tap_len) == NULL){
-		cout << "Error opening tap file "  << endl;
+		cout << "Error opening file tap"  << endl;
 		return 1;
 	}
 
@@ -325,7 +325,7 @@ static int detect_gesture(){
 	int hist_gesture_count[4] = {0};
 	
 	hist_gesture_count[gest] = 1;
-	for(int i=1;i<HIST_INP_SAMPLE;i++){//update gesture history while doing it
+	for(int i = 1; i < HIST_INP_SAMPLE; i++){//update gesture history while doing it
 		hist_gesture[i-1] = hist_gesture[i];
 		hist_gesture_count[hist_gesture[i]] =  hist_gesture_count[hist_gesture[i]] +1;
 	}
@@ -335,7 +335,7 @@ static int detect_gesture(){
 		return 3;
 	
 	//return mode for gestures
-	short m=0;
+	short m = 0;
 	int mnum = hist_gesture_count[0];
 	if(mnum < hist_gesture_count[1]){
 		m = 1;
@@ -352,15 +352,26 @@ Uint8 *audio_pos;
 Uint32 audio_len;
 Uint32 audio_played;
 
+void printStream(Uint8 *stream, int len) {
+	int i;
+	
+	for (i = 0; i < len; i++) {
+		printf("%d ", (int)*stream);
+		stream++;
+	}
+}
+
 static void SDL_audio_callback(void* udata, Uint8* stream, int len){
 	if (audio_len == 0) {
-		memset(stream, 0, len);
+		memset(stream, (Uint8) 0, len);
+		//printStream(stream, len);
 		return;
 	}
 	
 	len = (len > (int) audio_len ? audio_len : len);
 	
-	SDL_memcpy(stream, audio_pos,len);
+	memcpy(stream, audio_pos, len);
+	//printStream(stream, len);
 	
 	audio_pos += len;
 	audio_len -= len;
@@ -370,14 +381,14 @@ static void SDL_audio_callback(void* udata, Uint8* stream, int len){
 int main(int argc, char** argv){
 	//Initialize everything
 	Uint32 sound_tap_len;
-	Uint8*  sound_tap;
+	Uint8 *sound_tap;
 	Uint32 sound_sil_len = 44100;
 	Uint8  sound_sil[44100] = {0};
 	
 	Uint32 sound_up_len[NUM_SAMPLES] = {0};
-	Uint8** sound_up = (Uint8 **)calloc(NUM_SAMPLES,sizeof(Uint8 *));
+	Uint8 **sound_up = (Uint8 **)calloc(NUM_SAMPLES, sizeof(Uint8 *));
 	Uint32 sound_down_len[NUM_SAMPLES] = {0};
-	Uint8** sound_down = (Uint8 **)calloc(NUM_SAMPLES,sizeof(Uint8 *));
+	Uint8 **sound_down = (Uint8 **)calloc(NUM_SAMPLES, sizeof(Uint8 *));
 	
 	SDL_AudioSpec audio_spec;
 	
@@ -387,7 +398,7 @@ int main(int argc, char** argv){
 					sound_down, sound_down_len,
 					&audio_spec) != 0)
 	{
-		cout << "Problem reading files!\n";
+		cout << "Problem reading files\n";
 		return 1; 
 	}
 		
@@ -418,11 +429,12 @@ int main(int argc, char** argv){
 		cout << "Failed opening audio device\n" << SDL_GetError() <<endl;
 		return 1;
 	}
+	
 	SDL_PauseAudio(0);
 	
 	cout << "Everything initialized!" << endl;
 
-	//run thread for touch detection
+	//run threads for input and touch detection
 	int re2 = 0;
 	pthread_t user_inp;
 	if(pthread_create(&user_inp, NULL, input_state, (void *)re2)){
@@ -436,28 +448,29 @@ int main(int argc, char** argv){
 		return 1;
 	}
 	
-	cout << "Successfuly created background detection thread" << endl;
 	cout << "\n\nSTART PLAYING!!!\n\n" << flush;
 	
 	bool hold;
 	int prev_gesture = 0, posx, posy, pitch, prev_pitch = 0;
-	//while sense thread is going -> we produce sounds
+	//while sense thread is going -> we produce sound
 	while(run_program && pthread_kill(sense,0) == 0 ) 
 	{
 		gesture = 0;
 		hold = detect_hold();
+		//only play if stick is not being held
 		if(!hold)
 			gesture = detect_gesture();
-		
-		if(DEBUG_SOUND)	{
-			cout << "hold: " << hold << " " ;
-			cout << "gesture: " << gesture << "\n" << flush;
-		}
 		
 		//calc pitch
 		posx = joystick_x-sjoy_x;
 		posy = joystick_y-sjoy_y;
 		pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 25 );
+	
+		if(DEBUG_SOUND)	{
+			cout << "hold: " << hold << " " ;
+			cout << "gesture: " << gesture << "\n";
+			cout << "pitch: " << pitch << " " << flush;
+		}
 		
 		if(gesture == 0){
 				SDL_LockAudio();
