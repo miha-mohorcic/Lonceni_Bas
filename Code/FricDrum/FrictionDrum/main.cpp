@@ -22,7 +22,7 @@
 #define DEBUG_SOUND false
 #define DEBUG_INPUT false
 #define DEBUG_SDL 	false
-#define TOUCH_INPUTS 8
+#define TOUCH_INPUTS 9
 //delays should be big enough
 #define MICRO_S_SLEEP_UPDATE 10000 	//delay between MPR updates
 #define MICRO_S_SLEEP_SOUND  10000  //delay for sound production
@@ -42,12 +42,12 @@ using namespace std;
 
 int MPR121_ADDR = 0; //file descriptor for MPR121
 
-static uint write_MPR(int reg, int data){
+static uint write_MPR(uint reg, int data){
 	return wiringPiI2CWriteReg8(MPR121_ADDR, (reg & 0xff), (data & 0xff));
 }
 
-static uint8_t read_MPR(int reg){
-	return wiringPiI2CReadReg8(MPR121_ADDR, (reg & 0xff));
+static uint16_t read_MPR(uint reg){
+	return wiringPiI2CReadReg16(MPR121_ADDR, (reg & 0xff));
 }
 
 static void *input_state(void *threadid){
@@ -72,21 +72,22 @@ static void *input_state(void *threadid){
 }
 
 static void *update_state(void *threadid){
-	uint8_t lsb, msb;
+	//uint16_t lsb, msb;
 	while(run_program)
 	{
 		//analogRead(100); //read joystick pressed status	
 		joystick_x = analogRead(101); //read joystick x pitch
 		joystick_y = analogRead(102); //read joystick y pitch
-				
-		lsb = read_MPR(0);
-		msb = read_MPR(1);
-		touched = ((msb << 8) | lsb) ;
+			
+		touched = read_MPR(0);	
+		//lsb = read_MPR(0);
+		//msb = read_MPR(1);
+		//touched = ((msb << 8) | lsb) ;
 		
 		if(DEBUG_INPUT){
-			int mask = 1;
-			int i;
-			for(i = 0; i < TOUCH_INPUTS; i++){
+			uint mask = 1;
+					
+			for(int i = 0; i < TOUCH_INPUTS; i++){
 				cout << ((mask & touched) > 0);
 				mask <<= 1;
 			}
@@ -179,7 +180,8 @@ static int initialize_touch(){
 	//write_MPR(ATO_CFGT, 0xB5);  // Target = 0.9*USL = 0xB5 @3.3V
 
 	//write_MPR(ELE_CFG, 0x0C);  // Enables all 12 Electrodes
-	write_MPR(ELE_CFG, 0x08);  // Enables 8 Electrodes
+	//write_MPR(ELE_CFG, 0x08);  // Enables 8 Electrodes
+	write_MPR(ELE_CFG, 0x09);  // Enables 9 Electrodes
 	//write_MPR(ELE_CFG, 0xC8);	//baseline + 8 electrodes
 	cout << "MPR121 OK\n";
 	return 0;
@@ -495,7 +497,7 @@ int main(int argc, char** argv){
 			}
 			audio_played = 0;
 			SDL_UnlockAudio();
-		}else if(prev_gesture == gesture && pitch != prev_pitch){
+		}/*else if(prev_gesture == gesture && pitch != prev_pitch){
 			SDL_LockAudio();
 			switch(gesture){
 				case 1: 
@@ -511,7 +513,7 @@ int main(int argc, char** argv){
 					audio_pos = sound_tap + audio_played;
 			}
 			SDL_UnlockAudio();
-		}
+		}*/
 		prev_gesture = gesture;
 		usleep(MICRO_S_SLEEP_SOUND);
 	}
