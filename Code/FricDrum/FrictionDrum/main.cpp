@@ -37,6 +37,7 @@ static uint16_t joystick_y = 0;
 static uint16_t sjoy_x = 0; //start joystick position
 static uint16_t sjoy_y = 0;
 static int gesture;
+static uint play_mode = 0;
 
 using namespace std;
 
@@ -59,20 +60,19 @@ static void *input_state(void *threadid){
 			break;
 		}
 		else if(line == "0" )
-			gesture = 0;
+			play_mode = 0;
 		else if(line == "1" )
-			gesture = 1;
+			play_mode = 1;
 		else if(line == "2" )
-			gesture = 2;
+			play_mode = 2;
 		else if(line == "3" )
-			gesture = 3;	
+			play_mode = 3;	
 		usleep(500000);
     }
 	return 0; 
 }
 
 static void *update_state(void *threadid){
-	//uint16_t lsb, msb;
 	while(run_program)
 	{
 		//analogRead(100); //read joystick pressed status	
@@ -80,9 +80,6 @@ static void *update_state(void *threadid){
 		joystick_y = analogRead(102); //read joystick y pitch
 			
 		touched = read_MPR(0);	
-		//lsb = read_MPR(0);
-		//msb = read_MPR(1);
-		//touched = ((msb << 8) | lsb) ;
 		
 		if(DEBUG_INPUT){
 			uint mask = 1;
@@ -354,26 +351,15 @@ Uint8 *audio_pos;
 Uint32 audio_len;
 Uint32 audio_played;
 
-void printStream(Uint8 *stream, int len) {
-	int i;
-	
-	for (i = 0; i < len; i++) {
-		printf("%d ", (int)*stream);
-		stream++;
-	}
-}
-
 static void SDL_audio_callback(void* udata, Uint8* stream, int len){
 	if (audio_len == 0) {
 		memset(stream, (Uint8) 0, len);
-		//printStream(stream, len);
 		return;
 	}
 	
 	len = (len > (int) audio_len ? audio_len : len);
 	
 	memcpy(stream, audio_pos, len);
-	//printStream(stream, len);
 	
 	audio_pos += len;
 	audio_len -= len;
@@ -453,69 +439,61 @@ int main(int argc, char** argv){
 	cout << "\n\nSTART PLAYING!!!\n\n" << flush;
 	
 	bool hold;
-	int prev_gesture = 0, posx, posy, pitch, prev_pitch = 0;
+	int prev_gesture = 0, posx, posy, pitch;
 	//while sense thread is going -> we produce sound
 	while(run_program && pthread_kill(sense,0) == 0 ) 
 	{
-		gesture = 0;
-		hold = detect_hold();
-		//only play if stick is not being held
-		if(!hold)
-			gesture = detect_gesture();
+		if(play_mode == 0){
+			gesture = 0;
+			hold = detect_hold();
+			//only play if stick is not being held
+			if(!hold)
+				gesture = detect_gesture();
+			
+			//calc pitch
+			posx = joystick_x-sjoy_x;
+			posy = joystick_y-sjoy_y;
+			pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 25 );
 		
-		//calc pitch
-		posx = joystick_x-sjoy_x;
-		posy = joystick_y-sjoy_y;
-		pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 25 );
-	
-		if(DEBUG_SOUND)	{
-			cout << "hold: " << hold << " " ;
-			cout << "gesture: " << gesture << "\n";
-			cout << "pitch: " << pitch << " " << flush;
-		}
-		
-		if(gesture == 0){
+			if(DEBUG_SOUND)	{
+				cout << "hold: " << hold << " " ;
+				cout << "gesture: " << gesture << "\n";
+				cout << "pitch: " << pitch << " " << flush;
+			}
+			
+			if(gesture == 0){
+					SDL_LockAudio();
+					audio_len = sound_sil_len;
+					audio_pos = sound_sil;	
+					audio_played = 0;
+					SDL_UnlockAudio();
+			}else if((prev_gesture != gesture && audio_len == 0) || (prev_gesture == 0 && gesture != 0)){
 				SDL_LockAudio();
-				audio_len = sound_sil_len;
-				audio_pos = sound_sil;	
+				switch(gesture){
+					case 1: 
+						audio_len = sound_down_len[pitch];
+						audio_pos = sound_down[pitch];
+						break;
+					case 2: 
+						audio_len = sound_up_len[pitch];
+						audio_pos = sound_up[pitch];
+						break;
+					default:
+						audio_len = sound_tap_len;
+						audio_pos = sound_tap;
+				}
 				audio_played = 0;
 				SDL_UnlockAudio();
-		}else if((prev_gesture != gesture && audio_len == 0) || (prev_gesture == 0 && gesture != 0)){
-			SDL_LockAudio();
-			switch(gesture){
-				case 1: 
-					audio_len = sound_down_len[pitch];
-					audio_pos = sound_down[pitch];
-					break;
-				case 2: 
-					audio_len = sound_up_len[pitch];
-					audio_pos = sound_up[pitch];
-					break;
-				default:
-					audio_len = sound_tap_len;
-					audio_pos = sound_tap;
 			}
-			audio_played = 0;
-			SDL_UnlockAudio();
-		}/*else if(prev_gesture == gesture && pitch != prev_pitch){
-			SDL_LockAudio();
-			switch(gesture){
-				case 1: 
-					audio_len = sound_down_len[pitch] - audio_played;
-					audio_pos = sound_down[pitch] + audio_played;
-					break;
-				case 2: 
-					audio_len = sound_up_len[pitch] - audio_played;
-					audio_pos = sound_up[pitch] + audio_played;
-					break;
-				default:
-					audio_len = sound_tap_len - audio_played;
-					audio_pos = sound_tap + audio_played;
-			}
-			SDL_UnlockAudio();
-		}*/
-		prev_gesture = gesture;
-		usleep(MICRO_S_SLEEP_SOUND);
+			prev_gesture = gesture;
+			usleep(MICRO_S_SLEEP_SOUND);
+		}else if(play_mode == 1){
+			//square
+		}else if(play_mode == 2){
+			//sine
+		}else if(play_mode == 3){
+			//karplus
+		}
 	}
 	
 	if(pthread_kill(sense,0) == 0)
