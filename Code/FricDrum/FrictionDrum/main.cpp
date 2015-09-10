@@ -21,7 +21,7 @@
 
 #define DEBUG_SOUND false
 #define DEBUG_INPUT false
-#define DEBUG_SDL 	false
+#define DEBUG_SDL   false
 #define TOUCH_INPUTS 9
 //delays should be big enough
 #define MICRO_S_SLEEP_UPDATE 10000 	//delay between MPR updates
@@ -48,30 +48,38 @@ static uint write_MPR(uint reg, int data){
 }
 
 static uint16_t read_MPR(uint reg){
+	// MPR return consecutive registers, so we get all 16 bits at once. 
 	return wiringPiI2CReadReg16(MPR121_ADDR, (reg & 0xff));
 }
 
+// thread reads keyboard and changes global vars
 static void *input_state(void *threadid){
     for (string line; getline(cin, line);) {
         if(line == "q" || line == "Q"){
-			cout << "You wish to close the program. ";
-			cout << "This is going BYE BYE ";
+			cout << "You wish to close the program.\n";
+			cout << "This is going BYE BYE\n"; 
+			cout << flush;
 			run_program = false;
 			break;
 		}
-		else if(line == "0" )
+		else if(line == "0" ){
+			cout << "BASS!" << endl ;
 			play_mode = 0;
-		else if(line == "1" )
+		}else if(line == "1" ){
+			cout << "SQUARE WAVE!" << endl;
 			play_mode = 1;
-		else if(line == "2" )
+		}else if(line == "2" ){
+			cout << "SINE WAVE!" << endl;
 			play_mode = 2;
-		else if(line == "3" )
-			play_mode = 3;	
-		usleep(500000);
-    }
+		}else if(line == "3" ){
+			cout << "Karplus Strong" << endl;
+			play_mode = 3;	    
+		}
+	}
 	return 0; 
 }
 
+// thread reads GPIO inputs and changes global vars
 static void *update_state(void *threadid){
 	while(run_program)
 	{
@@ -187,6 +195,8 @@ static int initialize_touch(){
 static int initialize_joystick(){
 	wiringPiSetup();
 	mcp3004Setup(100,0);
+	
+	//for center "calibration" we use joystick values at this time
 	sjoy_x = analogRead(101);
 	sjoy_y = analogRead(102);
 	cout << "Joystick OK\n";
@@ -234,6 +244,7 @@ static int read_files(
 }
 
 static void update_hist(uint16_t *hist){
+	//moves history of touches one place backward
 	for(int i = 1; i < HIST_INP_HOLD_SAMPLE; i++)
 		hist[i-1] = hist[i];
 	hist[HIST_INP_HOLD_SAMPLE -1] = touched;
@@ -267,7 +278,7 @@ static bool detect_hold(){
 }
 
 static int detect_gesture(){
-	static int hist_gesture[HIST_INP_SAMPLE];
+	//static int hist_gesture[HIST_INP_SAMPLE];
 	static double hist_avg_sample[HIST_INP_SAMPLE]; //remember history
 	double avg = 0.0;
 
@@ -282,9 +293,8 @@ static int detect_gesture(){
 	double new_avg = 0.00;
 	uint16_t mask = 1;
 	int pins_touched = 0;
-	int i = 0;
 
-	for(i = 0; i < TOUCH_INPUTS; i++)
+	for(int i = 0; i < TOUCH_INPUTS; i++)
 	{
 		if(touched & mask)
 		{
@@ -301,7 +311,7 @@ static int detect_gesture(){
 	//detect tap
 	bool tap = false;
 	mask = 1;
-	for (i = 0; i < TOUCH_INPUTS; i++)
+	for (int i = 0; i < TOUCH_INPUTS; i++)
 	{
 		if (i == 0 && (touched & mask)) {
 			tap = true;
@@ -321,18 +331,22 @@ static int detect_gesture(){
 	else if (tap) 
 		gest = 3;
 	
+	return gest;
+	/* // CALCULATING MODE is commented out
+	 * // Looks like it works OK without -> a bit less delay
+	if(gest == 3) //tap
+		return 3;
+	
 	int hist_gesture_count[4] = {0};
 	
-	hist_gesture_count[gest] = 1;
+	//calculate mode and decide on gesture
 	for(int i = 1; i < HIST_INP_SAMPLE; i++){//update gesture history while doing it
 		hist_gesture[i-1] = hist_gesture[i];
 		hist_gesture_count[hist_gesture[i]] =  hist_gesture_count[hist_gesture[i]] +1;
 	}
+	hist_gesture_count[gest] = 1;
 	hist_gesture[HIST_INP_SAMPLE-1] = gest;
-	
-	if(gest == 3) //tap
-		return 3;
-	
+		
 	//return mode for gestures
 	short m = 0;
 	int mnum = hist_gesture_count[0];
@@ -345,6 +359,7 @@ static int detect_gesture(){
 	}
 	
 	return m;
+	* */
 }
 
 Uint8 *audio_pos;
