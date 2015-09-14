@@ -376,10 +376,12 @@ static void SDL_audio_callback(void* udata, Uint8* stream, int len){
 	
 	memcpy(stream, audio_pos, len);
 	
+	/* *
 	for(int i=0;i<500;i++){
 		cout << (int) stream[i];
 	}
 	cout << "\n";
+	* */
 	
 	audio_pos += len;
 	audio_len -= len;
@@ -516,14 +518,14 @@ int main(int argc, char** argv){
 			Uint8 volume = UINT8_MAX/TOUCH_INPUTS;
 			volume = (Uint8) ((float)volume * ((float) joystick_x/1024));
 			
-			for(int i = 0; i< 4410;i++)
+			for(int i = 0; i< 8820;i++)
 				gen_sample[i]=0;
 			
 			uint16_t mask = 1;
 			for(int j=0; j<TOUCH_INPUTS; j++){
 				if(mask & touched){
 					int fr = 44100/frequencies[j]/2;
-					for(int i = 0; i< 4410;i++){
+					for(int i = 0; i< 8820;i++){
 						if((i/fr) % 2 == 0){
 							gen_sample[i] = gen_sample[i] + volume;
 						}
@@ -534,13 +536,36 @@ int main(int argc, char** argv){
 			
 			SDL_LockAudio();
 			audio_pos = gen_sample;
-			audio_len = 4410;
+			audio_len = 8820;
 			audio_played = 0;
 			SDL_UnlockAudio();
 			usleep(MICRO_S_SLEEP_SOUND);
 			
 		}else if(play_mode == 2){
 			//sine
+			Uint8 volume = UINT8_MAX/TOUCH_INPUTS;
+			volume = (Uint8) ((float)volume * ((float) joystick_x/1024));
+			
+			for(int i = 0; i< 8820;i++)
+				gen_sample[i]=0;
+			
+			uint16_t mask = 1;
+			for(int j=0; j<TOUCH_INPUTS; j++){
+				if(mask & touched){
+					for(int i = 0; i< 8820;i++){
+						gen_sample[i] = gen_sample[i] + (Uint8)(volume * sin((double)(i*frequencies[j]*2*M_PI)/44100));
+						
+					}
+				}
+				mask <<= 1;
+			}
+			
+			SDL_LockAudio();
+			audio_pos = gen_sample;
+			audio_len = 8820;
+			audio_played = 0;
+			SDL_UnlockAudio();
+			usleep(MICRO_S_SLEEP_SOUND);
 		}else if(play_mode == 3){
 			//karplus
 		}
