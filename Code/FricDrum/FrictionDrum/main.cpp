@@ -376,6 +376,11 @@ static void SDL_audio_callback(void* udata, Uint8* stream, int len){
 	
 	memcpy(stream, audio_pos, len);
 	
+	for(int i=0;i<500;i++){
+		cout << (int) stream[i];
+	}
+	cout << "\n";
+	
 	audio_pos += len;
 	audio_len -= len;
 	audio_played += len;
@@ -455,6 +460,10 @@ int main(int argc, char** argv){
 	
 	bool hold;
 	int prev_gesture = 0, posx, posy, pitch;
+	
+	int frequencies[9]={131,261,294,330,350,392,440,494,523};
+	Uint8 gen_sample[44100] = {0};
+	
 	//while sense thread is going -> we produce sound
 	while(run_program && pthread_kill(sense,0) == 0 ) 
 	{
@@ -466,8 +475,8 @@ int main(int argc, char** argv){
 				gesture = detect_gesture();
 			
 			//calc pitch
-			posx = joystick_x-sjoy_x;
-			posy = joystick_y-sjoy_y;
+			posx = joystick_x - sjoy_x;
+			posy = joystick_y - sjoy_y;
 			pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 25 );
 		
 			if(DEBUG_SOUND)	{
@@ -504,6 +513,32 @@ int main(int argc, char** argv){
 			usleep(MICRO_S_SLEEP_SOUND);
 		}else if(play_mode == 1){
 			//square
+			Uint8 volume = UINT8_MAX/TOUCH_INPUTS;
+			volume = (Uint8) ((float)volume * ((float) joystick_x/1024));
+			
+			for(int i = 0; i< 4410;i++)
+				gen_sample[i]=0;
+			
+			uint16_t mask = 1;
+			for(int j=0; j<TOUCH_INPUTS; j++){
+				if(mask & touched){
+					int fr = 44100/frequencies[j]/2;
+					for(int i = 0; i< 4410;i++){
+						if((i/fr) % 2 == 0){
+							gen_sample[i] = gen_sample[i] + volume;
+						}
+					}
+				}
+				mask <<= 1;
+			}
+			
+			SDL_LockAudio();
+			audio_pos = gen_sample;
+			audio_len = 4410;
+			audio_played = 0;
+			SDL_UnlockAudio();
+			usleep(MICRO_S_SLEEP_SOUND);
+			
 		}else if(play_mode == 2){
 			//sine
 		}else if(play_mode == 3){
