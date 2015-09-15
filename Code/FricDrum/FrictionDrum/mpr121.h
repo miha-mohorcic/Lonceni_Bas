@@ -1,4 +1,7 @@
-//Similar to Arduino sample
+
+//Coded addresses for MPR registers
+//Same names as in arduino sample for MPR121
+
 #define MHD_R	0x2B
 #define NHD_R	0x2C
 #define	NCL_R 	0x2D
@@ -46,5 +49,6 @@
 #define	ATO_CFGL	0x7E
 #define	ATO_CFGT	0x7F
 
+//setting thresholds for touch and release (default)
 #define TOU_THRESH	0x06
 #define	REL_THRESH	0x0A

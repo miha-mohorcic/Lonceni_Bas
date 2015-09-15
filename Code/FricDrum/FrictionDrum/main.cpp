@@ -14,7 +14,7 @@
 #include "wiringPi.h"
 #include <mcp3004.h>
 // touch sensor
-#include "mpr121.h" //only register definitions
+#include "mpr121.h" //register definitions
 #include "wiringPiI2C.h" 
 // WAV playing 
 #include "SDL2/SDL.h"
@@ -23,32 +23,31 @@
 #define DEBUG_INPUT false
 #define DEBUG_SDL   false
 #define TOUCH_INPUTS 9
-//delays should be big enough
-#define MICRO_S_SLEEP_UPDATE 10000 	//delay between MPR updates
-#define MICRO_S_SLEEP_SOUND  10000  //delay for sound production
+
+//WARNING: delays should be big enough, otherwise there is more choppines
+#define MICRO_S_SLEEP_UPDATE 10000 //delay between MPR updates
+#define MICRO_S_SLEEP_SOUND  10000 //delay for sound production
 #define HIST_INP_HOLD_SAMPLE 100
 #define HIST_INP_SAMPLE      10
-#define NUM_SAMPLES 25				//number of pitch shifted samples
+#define NUM_SAMPLES          25    //number of pitch shifted samples
 
-static bool run_program = true;
-static uint16_t touched = 0; //global bitwise status of currently active inputs
+static bool run_program = true; //threads run  while this is true
+static uint play_mode = 0;      //which sound we are pdocuing while playing
+static uint16_t touched = 0;    //global bitwise status of currently active inputs
 static uint16_t joystick_x = 0; //global position of joystick x direction -> between 1-1023
 static uint16_t joystick_y = 0;
 static uint16_t sjoy_x = 0; //start joystick position
 static uint16_t sjoy_y = 0;
 static int gesture;
-static uint play_mode = 0;
+int MPR121_ADDR = 0; //file descriptor for MPR121
 
 using namespace std;
-
-int MPR121_ADDR = 0; //file descriptor for MPR121
 
 static uint write_MPR(uint reg, int data){
 	return wiringPiI2CWriteReg8(MPR121_ADDR, (reg & 0xff), (data & 0xff));
 }
-
 static uint16_t read_MPR(uint reg){
-	// MPR return consecutive registers, so we get all 16 bits at once. 
+	// Instead of 2 reads of 8 bits, MPR can return 2 consecutive regs. 
 	return wiringPiI2CReadReg16(MPR121_ADDR, (reg & 0xff));
 }
 
@@ -251,8 +250,16 @@ static void update_hist(uint16_t *hist){
 }
 
 static bool detect_hold(){
+	/* detect connected "rows" of touches in history
+	 * _*_*___ touched -6
+	 * _*__*__ touched -4
+	 * _*___*_ touched -2
+	 * _*____* touched
+	 *  ^ detect this
+	 */
+	
 	static uint16_t hist[HIST_INP_HOLD_SAMPLE] = {0};
-	static bool comp = true;
+	static bool comp = true; //only every second interval calc hold
 	static bool hold = true;
 	
 	if(comp){
@@ -278,6 +285,15 @@ static bool detect_hold(){
 }
 
 static int detect_gesture(){
+	
+	/* detect connected "rows" of touches in history
+	 * _*_*___ touched -3
+	 * _*__*__ touched -2
+	 * _*___*_ touched -1
+	 * _*____* touched
+	 *       ^ detect averaged direction change
+	 */
+		
 	//static int hist_gesture[HIST_INP_SAMPLE];
 	static double hist_avg_sample[HIST_INP_SAMPLE]; //remember history
 	double avg = 0.0;
@@ -331,12 +347,10 @@ static int detect_gesture(){
 	else if (tap) 
 		gest = 3;
 	
-	return gest;
-	/* // CALCULATING MODE is commented out
-	 * // Looks like it works OK without -> a bit less delay
 	if(gest == 3) //tap
 		return 3;
 	
+	static short hist_gesture[HIST_INP_SAMPLE] ={0};
 	int hist_gesture_count[4] = {0};
 	
 	//calculate mode and decide on gesture
@@ -359,7 +373,6 @@ static int detect_gesture(){
 	}
 	
 	return m;
-	* */
 }
 
 Uint8 *audio_pos;
@@ -367,6 +380,9 @@ Uint32 audio_len;
 Uint32 audio_played;
 
 static void SDL_audio_callback(void* udata, Uint8* stream, int len){
+	//Called when SDL need buffer (seperate thread)
+	//We simply copy the memory to stream, and not use queue
+	//this gives us less latency, but makes prediction a bit harder
 	if (audio_len == 0) {
 		memset(stream, (Uint8) 0, len);
 		return;
@@ -376,20 +392,13 @@ static void SDL_audio_callback(void* udata, Uint8* stream, int len){
 	
 	memcpy(stream, audio_pos, len);
 	
-	/* *
-	for(int i=0;i<500;i++){
-		cout << (int) stream[i];
-	}
-	cout << "\n";
-	* */
-	
 	audio_pos += len;
 	audio_len -= len;
 	audio_played += len;
 }
 
 int main(int argc, char** argv){
-	//Initialize everything
+	//Initialize
 	Uint32 sound_tap_len;
 	Uint8 *sound_tap;
 	Uint32 sound_sil_len = 44100;
@@ -460,7 +469,6 @@ int main(int argc, char** argv){
 	
 	cout << "\n\nSTART PLAYING!!!\n\n" << flush;
 	
-	bool hold;
 	int prev_gesture = 0, posx, posy, pitch;
 	
 	int frequencies[9]={131,261,294,330,350,392,440,494,523};
@@ -471,9 +479,9 @@ int main(int argc, char** argv){
 	{
 		if(play_mode == 0){
 			gesture = 0;
-			hold = detect_hold();
+	
 			//only play if stick is not being held
-			if(!hold)
+			if(!detect_hold())
 				gesture = detect_gesture();
 			
 			//calc pitch
@@ -482,12 +490,12 @@ int main(int argc, char** argv){
 			pitch = min(NUM_SAMPLES-1, (int)sqrt((posx*posx) + (posy*posy)) / 25 );
 		
 			if(DEBUG_SOUND)	{
-				cout << "hold: " << hold << " " ;
+				//cout << "hold: " << hold << " " ;
 				cout << "gesture: " << gesture << "\n";
 				cout << "pitch: " << pitch << " " << flush;
 			}
 			
-			if(gesture == 0){
+			if(gesture == 0){ //play silence
 					SDL_LockAudio();
 					audio_len = sound_sil_len;
 					audio_pos = sound_sil;	
@@ -514,9 +522,11 @@ int main(int argc, char** argv){
 			prev_gesture = gesture;
 			usleep(MICRO_S_SLEEP_SOUND);
 		}else if(play_mode == 1){
-			//square
+			//generate square wave
 			Uint8 volume = UINT8_MAX/TOUCH_INPUTS;
 			volume = (Uint8) ((float)volume * ((float) joystick_x/1024));
+			
+			int pitch_shift = (joystick_y - sjoy_y)/4;
 			
 			for(int i = 0; i< 8820;i++)
 				gen_sample[i]=0;
@@ -524,7 +534,8 @@ int main(int argc, char** argv){
 			uint16_t mask = 1;
 			for(int j=0; j<TOUCH_INPUTS; j++){
 				if(mask & touched){
-					int fr = 44100/frequencies[j]/2;
+					int fr = frequencies[j] + pitch_shift;
+					fr = 44100 / fr / 2;
 					for(int i = 0; i< 8820;i++){
 						if((i/fr) % 2 == 0){
 							gen_sample[i] = gen_sample[i] + volume;
@@ -542,9 +553,11 @@ int main(int argc, char** argv){
 			usleep(MICRO_S_SLEEP_SOUND);
 			
 		}else if(play_mode == 2){
-			//sine
+			//generate sine wave
 			Uint8 volume = UINT8_MAX/TOUCH_INPUTS;
 			volume = (Uint8) ((float)volume * ((float) joystick_x/1024));
+			
+			int pitch_shift = (joystick_y - sjoy_y)/4;
 			
 			for(int i = 0; i< 8820;i++)
 				gen_sample[i]=0;
@@ -553,7 +566,7 @@ int main(int argc, char** argv){
 			for(int j=0; j<TOUCH_INPUTS; j++){
 				if(mask & touched){
 					for(int i = 0; i< 8820;i++){
-						gen_sample[i] = gen_sample[i] + (Uint8)(volume * sin((double)(i*frequencies[j]*2*M_PI)/44100));
+						gen_sample[i] = gen_sample[i] + (Uint8)(volume * sin((double)(i*(frequencies[j]+pitch_shift)*2*M_PI)/44100));
 						
 					}
 				}
@@ -567,7 +580,7 @@ int main(int argc, char** argv){
 			SDL_UnlockAudio();
 			usleep(MICRO_S_SLEEP_SOUND);
 		}else if(play_mode == 3){
-			//karplus
+			// TODO karplus
 		}
 	}
 	
@@ -576,7 +589,6 @@ int main(int argc, char** argv){
 	if(pthread_kill(user_inp,0) == 0)
 		pthread_kill(user_inp,9);
 		
-	//free space before closing
 	SDL_CloseAudio();
 	for(int i = 0; i < NUM_SAMPLES; i++){
 		free(sound_up[i]);
