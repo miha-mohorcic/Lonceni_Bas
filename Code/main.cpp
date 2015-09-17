@@ -213,7 +213,7 @@ static int read_files(
 	string file_name;
     //gesture up files
     for(int i = 0; i < NUM_SAMPLES; i++){
-		file_name = "samples/up"+ to_string(i)+".wav";
+		file_name = "/home/pi/Desktop/Lonceni_Bas/Code/samples/up"+ to_string(i)+".wav";
 		if(SDL_LoadWAV(file_name.c_str(), audio_spec, &sound_up[i], &sound_up_len[i]) == NULL){
 			cout << "Error opening file up" << i << endl;
 			return 1;
@@ -223,7 +223,7 @@ static int read_files(
 	
 	//gesture down files
 	for(int i = 0; i < NUM_SAMPLES; i++){
-		file_name = "samples/down"+ to_string(i)+".wav";
+		file_name = "/home/pi/Desktop/Lonceni_Bas/Code/samples/down"+ to_string(i)+".wav";
 		if(SDL_LoadWAV(file_name.c_str(), audio_spec, &sound_down[i], &sound_down_len[i]) == NULL){
 			cout << "Error opening file down" << i << endl;
 			return 1;
@@ -232,7 +232,7 @@ static int read_files(
 	}
 	
 	//tap file
-	file_name = "samples/tap.wav";
+	file_name = "/home/pi/Desktop/Lonceni_Bas/Code/samples/tap.wav";
 	if(SDL_LoadWAV(file_name.c_str(), audio_spec, sound_tap, sound_tap_len) == NULL){
 		cout << "Error opening file tap"  << endl;
 		return 1;
